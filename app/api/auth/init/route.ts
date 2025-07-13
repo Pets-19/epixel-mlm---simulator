@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
       email: 'admin@epixelmlm.com',
       name: 'System Administrator',
       password: 'admin123', // This should be changed on first login
-      role: 'system_admin'
+      role: 'system_admin',
+      whatsapp_number: '+1234567890' // Default WhatsApp number for system admin
     })
 
     return NextResponse.json({

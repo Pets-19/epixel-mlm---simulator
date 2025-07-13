@@ -133,38 +133,42 @@ export default function Dashboard() {
           {/* Role-based Actions */}
           {(user?.role === 'system_admin' || user?.role === 'admin') && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <UserPlus className="h-5 w-5 mr-2" />
-                    Create User
-                  </CardTitle>
-                  <CardDescription>
-                    Add new users to the system with specific roles and permissions.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+              <Link href="/create-user" className="block">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <UserPlus className="h-5 w-5 mr-2" />
+                      Create User
+                    </CardTitle>
+                    <CardDescription>
+                      Add new users to the system with specific roles and permissions.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
 
-              <Card className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Users className="h-5 w-5 mr-2" />
-                    User Management
-                  </CardTitle>
-                  <CardDescription>
-                    Manage existing users, update roles, and monitor activity.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+              <Link href="/users" className="block">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Users className="h-5 w-5 mr-2" />
+                      User Management
+                    </CardTitle>
+                    <CardDescription>
+                      Manage existing users, update roles, and monitor activity.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
 
-              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <Card className="cursor-pointer hover:shadow-md transition-shadow opacity-50">
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Settings className="h-5 w-5 mr-2" />
                     System Settings
                   </CardTitle>
                   <CardDescription>
-                    Configure system-wide settings and preferences.
+                    Configure system-wide settings and preferences. (Coming Soon)
                   </CardDescription>
                 </CardHeader>
               </Card>
