@@ -4,7 +4,8 @@ import { useAuth } from '@/components/auth-provider'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Image from 'next/image'
-import { LogOut, Users, Settings, BarChart3, UserPlus } from 'lucide-react'
+import Link from 'next/link'
+import { LogOut, Users, Settings, BarChart3, UserPlus, User } from 'lucide-react'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -49,6 +50,12 @@ export default function Dashboard() {
                 <span className="mx-2">•</span>
                 <span className="text-gray-500">{getRoleDisplayName(user?.role || '')}</span>
               </div>
+              <Link href="/profile">
+                <Button variant="outline" size="sm">
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </Button>
+              </Link>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
