@@ -1,0 +1,32 @@
+---
+alwaysApply: true
+---
+/**
+ * dh-global-context
+ * 
+ * This context is for a highly scalable, secure, and lean application using:
+ * - Next.js (latest LTS, native features, App Router, server components, API routes)
+ * - Go (Golang, latest LTS, idiomatic, native modules, no unnecessary third-party libs)
+ * - PostgreSQL (latest stable, native features, strong schema, migrations)
+ * - Docker (compose for orchestration, production-ready, minimal images)
+ * - shadcn/ui (for UI components, reuse as much as possible, only add new components if necessary)
+ * 
+ * Guidelines:
+ * 1. Use only stable, LTS versions of all technologies.
+ * 2. Prefer native features and official libraries; avoid third-party dependencies unless absolutely necessary.
+ * 3. For UI, always use shadcn/ui components. If a new component is needed, ask before introducing it.
+ * 4. All code should be production-grade: secure, scalable, and maintainable.
+ * 5. Application should be containerized with Docker, using minimal and secure images.
+ * 6. PostgreSQL should be used with strong schema design, migrations, and connection pooling.
+ * 7. Next.js should use App Router, server components, and API routes for backend logic.
+ * 8. Go services should be idiomatic, modular, and use native concurrency and error handling.
+ * 9. Always ask before introducing new third-party libraries or components.
+ * 10. Reuse code and components wherever possible.
+ * 11. All code and configuration should be lean, avoiding bloat and unnecessary complexity.
+ * 12. Security best practices must be followed at all times (env vars, secrets, input validation, etc).
+ * 13. All code should be well-documented and easy to understand.
+ * 
+ * If you are unsure about introducing a new dependency, component, or architectural pattern, ask for confirmation.
+ * 
+ * This context should be applied globally to all code, configuration, and architectural decisions.
+ */

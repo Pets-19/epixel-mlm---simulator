@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: epixel_mlm_postgres
+    environment:
+      POSTGRES_DB: epixel_mlm_tools
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/02-init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - epixel_network
+    restart: unless-stopped
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: epixel_mlm_app
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=epixel_mlm_tools
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - epixel_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  epixel_network:
+    driver: bridge 
