@@ -13,6 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./database/init.sql:/docker-entrypoint-initdb.d/02-init.sql
+      - ./database/migration_genealogy.sql:/docker-entrypoint-initdb.d/03-migration_genealogy.sql
     ports:
       - "5432:5432"
     networks:
@@ -33,8 +34,30 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=password
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+      - GO_SERVICE_URL=http://genealogy-simulator:8080
     ports:
       - "3000:3000"
+    depends_on:
+      - postgres
+      - genealogy-simulator
+    networks:
+      - epixel_network
+    restart: unless-stopped
+
+  # Go Genealogy Simulator Service
+  genealogy-simulator:
+    build:
+      context: ./genealogy-simulator
+      dockerfile: Dockerfile
+    container_name: epixel_mlm_genealogy_simulator
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=epixel_mlm_tools
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+    ports:
+      - "8080:8080"
     depends_on:
       - postgres
     networks:

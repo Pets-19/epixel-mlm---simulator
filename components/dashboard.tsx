@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Image from 'next/image'
 import Link from 'next/link'
-import { LogOut, Users, Settings, BarChart3, UserPlus, User } from 'lucide-react'
+import { LogOut, Users, Settings, BarChart3, UserPlus, User, Network, GitBranch } from 'lucide-react'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -156,6 +156,34 @@ export default function Dashboard() {
                     </CardTitle>
                     <CardDescription>
                       Manage existing users, update roles, and monitor activity.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+
+              <Link href="/genealogy-types" className="block">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <GitBranch className="h-5 w-5 mr-2" />
+                      Genealogy Types
+                    </CardTitle>
+                    <CardDescription>
+                      Manage genealogy structure types and their rules.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+
+              <Link href="/genealogy-simulation" className="block">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Network className="h-5 w-5 mr-2" />
+                      Genealogy Simulation
+                    </CardTitle>
+                    <CardDescription>
+                      Test and simulate node filling logic with different parameters.
                     </CardDescription>
                   </CardHeader>
                 </Card>

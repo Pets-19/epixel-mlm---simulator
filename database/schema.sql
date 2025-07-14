@@ -46,4 +46,7 @@ CREATE TRIGGER update_users_updated_at
 -- This is just a placeholder - the actual user will be created via the API
 INSERT INTO users (email, name, password_hash, role, whatsapp_number) 
 VALUES ('admin@epixelmlm.com', 'System Administrator', 'placeholder', 'system_admin', '+1234567890')
-ON CONFLICT (email) DO NOTHING; 
+ON CONFLICT (email) DO NOTHING;
+
+-- Include genealogy migration
+\i /docker-entrypoint-initdb.d/migration_genealogy.sql 
