@@ -38,6 +38,7 @@ export default function GenealogySimulationPage() {
   const [maxUsers, setMaxUsers] = useState<number>(0)
   const [payoutCycleType, setPayoutCycleType] = useState<string>('weekly')
   const [numberOfCycles, setNumberOfCycles] = useState<number>(0)
+  const [maxChildrenCount, setMaxChildrenCount] = useState<number>(2)
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [simulating, setSimulating] = useState(false)
@@ -77,6 +78,18 @@ export default function GenealogySimulationPage() {
       return
     }
 
+    // Get selected genealogy type to check if Max Children Count is required
+    const selectedGenealogyType = genealogyTypes.find(type => type.id.toString() === selectedType)
+    if (selectedGenealogyType && (selectedGenealogyType.name === 'Unilevel Plan' || selectedGenealogyType.name === 'Matrix Plan')) {
+      if (!maxChildrenCount || maxChildrenCount <= 0) {
+        alert('Please enter a valid number for Max Children Count')
+        return
+      }
+    } else if (selectedGenealogyType?.name === 'Binary Plan') {
+      // Set default value for Binary Plan
+      setMaxChildrenCount(2)
+    }
+
     setSimulating(true)
     try {
       const response = await fetch('/api/genealogy/simulate', {
@@ -89,6 +102,7 @@ export default function GenealogySimulationPage() {
           max_expected_users: maxUsers,
           payout_cycle_type: payoutCycleType,
           number_of_cycles: numberOfCycles,
+          max_children_count: maxChildrenCount,
         }),
       })
 
@@ -214,6 +228,52 @@ export default function GenealogySimulationPage() {
                 placeholder="Enter number of cycles"
                 required
               />
+            </div>
+
+            {/* Max Children Count - Always show but with different labels */}
+            <div className="space-y-2">
+              <Label htmlFor="max-children">
+                {(() => {
+                  const selectedGenealogyType = genealogyTypes.find(type => type.id.toString() === selectedType)
+                  if (selectedGenealogyType?.name === 'Matrix Plan') {
+                    return 'Max Children Count *'
+                  } else if (selectedGenealogyType?.name === 'Unilevel Plan') {
+                    return 'Max Children Count *'
+                  } else {
+                    return 'Max Children Count (Binary Plan uses 2)'
+                  }
+                })()}
+              </Label>
+              <Input
+                id="max-children"
+                type="number"
+                value={maxChildrenCount || ''}
+                onChange={(e) => setMaxChildrenCount(parseInt(e.target.value) || 0)}
+                min="1"
+                max="20"
+                placeholder="Enter max children per parent"
+                required={(() => {
+                  const selectedGenealogyType = genealogyTypes.find(type => type.id.toString() === selectedType)
+                  return selectedGenealogyType && (selectedGenealogyType.name === 'Unilevel Plan' || selectedGenealogyType.name === 'Matrix Plan')
+                })()}
+                disabled={(() => {
+                  const selectedGenealogyType = genealogyTypes.find(type => type.id.toString() === selectedType)
+                  return selectedGenealogyType?.name === 'Binary Plan'
+                })()}
+              />
+              <p className="text-sm text-gray-500">
+                {(() => {
+                  const selectedGenealogyType = genealogyTypes.find(type => type.id.toString() === selectedType)
+                  if (selectedGenealogyType?.name === 'Matrix Plan') {
+                    return 'Maximum number of children any parent node can have'
+                  } else if (selectedGenealogyType?.name === 'Unilevel Plan') {
+                    return 'Average number of children per parent for filling/spilling logic'
+                  } else if (selectedGenealogyType?.name === 'Binary Plan') {
+                    return 'Binary Plan always uses 2 children per parent'
+                  }
+                  return 'Select a genealogy type to see specific requirements'
+                })()}
+              </p>
             </div>
 
             <div className="flex gap-4">

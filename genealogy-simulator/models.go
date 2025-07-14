@@ -39,6 +39,7 @@ type SimulationRequest struct {
 	MaxExpectedUsers int    `json:"max_expected_users"`
 	PayoutCycleType  string `json:"payout_cycle_type"` // weekly, biweekly, monthly
 	NumberOfCycles   int    `json:"number_of_cycles"`
+	MaxChildrenCount int    `json:"max_children_count"`
 }
 
 // SimulationResponse represents the response from genealogy simulation

@@ -86,17 +86,47 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get genealogy type to determine simulation logic
+	genealogyType, err := getGenealogyTypeByID(req.GenealogyTypeID)
+	if err != nil {
+		log.Printf("Error getting genealogy type: %v", err)
+		http.Error(w, "Invalid genealogy type", http.StatusBadRequest)
+		return
+	}
+
 	// Generate simulation ID
 	simulationID := uuid.New().String()
 	log.Printf("Generated simulation ID: %s", simulationID)
 
 	// Create simulator based on genealogy type
-	simulator := NewBinaryPlanSimulator(simulationID)
-	log.Println("Created binary plan simulator")
+	var response SimulationResponse
+	switch genealogyType.Name {
+	case "Binary Plan":
+		log.Println("Creating binary plan simulator")
+		simulator := NewBinaryPlanSimulator(simulationID)
+		response = simulator.Simulate(req)
+	case "Unilevel Plan":
+		log.Println("Creating unilevel plan simulator")
+		maxChildrenCount := req.MaxChildrenCount
+		if maxChildrenCount <= 0 {
+			maxChildrenCount = genealogyType.MaxChildrenPerNode // fallback to database default
+		}
+		simulator := NewUnilevelPlanSimulator(simulationID, maxChildrenCount)
+		response = simulator.Simulate(req)
+	case "Matrix Plan":
+		log.Println("Creating matrix plan simulator")
+		maxChildrenCount := req.MaxChildrenCount
+		if maxChildrenCount <= 0 {
+			maxChildrenCount = genealogyType.MaxChildrenPerNode // fallback to database default
+		}
+		simulator := NewMatrixPlanSimulator(simulationID, maxChildrenCount)
+		response = simulator.Simulate(req)
+	default:
+		log.Printf("Unsupported genealogy type: %s", genealogyType.Name)
+		http.Error(w, "Unsupported genealogy type", http.StatusBadRequest)
+		return
+	}
 
-	// Run simulation
-	log.Println("Starting simulation...")
-	response := simulator.Simulate(req)
 	log.Printf("Simulation completed. Generated %d nodes", len(response.Nodes))
 
 	w.Header().Set("Content-Type", "application/json")
