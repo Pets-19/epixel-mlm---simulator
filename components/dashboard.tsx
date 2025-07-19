@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Image from 'next/image'
 import Link from 'next/link'
-import { LogOut, Users, Settings, BarChart3, UserPlus, User, Network, GitBranch } from 'lucide-react'
+import { LogOut, Users, BarChart3, UserPlus, User, Network, GitBranch } from 'lucide-react'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -119,7 +119,7 @@ export default function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Pending Actions</CardTitle>
-                <Settings className="h-4 w-4 text-muted-foreground" />
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">0</div>
@@ -189,17 +189,7 @@ export default function Dashboard() {
                 </Card>
               </Link>
 
-              <Card className="cursor-pointer hover:shadow-md transition-shadow opacity-50">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Settings className="h-5 w-5 mr-2" />
-                    System Settings
-                  </CardTitle>
-                  <CardDescription>
-                    Configure system-wide settings and preferences. (Coming Soon)
-                  </CardDescription>
-                </CardHeader>
-              </Card>
+
             </div>
           )}
 

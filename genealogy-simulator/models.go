@@ -26,7 +26,7 @@ type GenealogyNode struct {
 	RightBound      int       `json:"right_bound"`
 	Depth           int       `json:"depth"`
 	Position        string    `json:"position"`
-	SimulationID    string    `json:"simulation_id"`
+	SimulationID    *string   `json:"simulation_id"`
 	PayoutCycle     int       `json:"payout_cycle"`
 	CyclePosition   int       `json:"cycle_position"`
 	CreatedAt       time.Time `json:"created_at"`
@@ -184,7 +184,7 @@ func (b *BinaryPlanSimulator) createNode(userID, genealogyTypeID, cycle, cyclePo
 		RightBound:      rightBound,
 		Depth:           depth,
 		Position:        position,
-		SimulationID:    b.simulationID,
+		SimulationID:    &b.simulationID,
 		PayoutCycle:     cycle,
 		CyclePosition:   cyclePosition,
 		CreatedAt:       time.Now(),

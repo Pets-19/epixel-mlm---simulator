@@ -113,7 +113,7 @@ func (u *UnilevelPlanSimulator) createNode(userID, genealogyTypeID, cycle, cycle
 		RightBound:      rightBound,
 		Depth:           depth,
 		Position:        position,
-		SimulationID:    u.simulationID,
+		SimulationID:    &u.simulationID,
 		PayoutCycle:     cycle,
 		CyclePosition:   cyclePosition,
 		CreatedAt:       time.Now(),

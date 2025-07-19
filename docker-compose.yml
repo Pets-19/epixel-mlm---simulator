@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -14,6 +12,8 @@ services:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ./database/init.sql:/docker-entrypoint-initdb.d/02-init.sql
       - ./database/migration_genealogy.sql:/docker-entrypoint-initdb.d/03-migration_genealogy.sql
+      - ./database/insert_genealogy_types.sql:/docker-entrypoint-initdb.d/04-insert_genealogy_types.sql
+
     ports:
       - "5432:5432"
     networks:
@@ -34,7 +34,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=password
       - JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-      - GO_SERVICE_URL=http://genealogy-simulator:8080
+      - GO_API_URL=http://genealogy-simulator:8080
     ports:
       - "3000:3000"
     depends_on:

@@ -48,5 +48,4 @@ INSERT INTO users (email, name, password_hash, role, whatsapp_number)
 VALUES ('admin@epixelmlm.com', 'System Administrator', 'placeholder', 'system_admin', '+1234567890')
 ON CONFLICT (email) DO NOTHING;
 
--- Include genealogy migration
-\i /docker-entrypoint-initdb.d/migration_genealogy.sql 
+-- Genealogy migration will be run separately 

@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
 
-export async function GET() {
+const GO_SERVICE_URL = process.env.GO_API_URL || 'http://localhost:8080'
+
+export async function GET(request: NextRequest) {
   try {
-    const query = `
-      SELECT id, name, description, max_children_per_node, rules, is_active, created_at, updated_at
-      FROM genealogy_types
-      WHERE is_active = true
-      ORDER BY name
-    `
-    
-    const result = await pool.query(query)
-    
-    return NextResponse.json(result.rows)
+    const response = await fetch(`${GO_SERVICE_URL}/api/genealogy/types`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Go service responded with status: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching genealogy types:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to fetch genealogy types' },
       { status: 500 }
     )
   }
@@ -24,29 +28,26 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, description, max_children_per_node, rules } = await request.json()
+    const body = await request.json()
+    
+    const response = await fetch(`${GO_SERVICE_URL}/api/genealogy/types`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
 
-    if (!name || !description || !max_children_per_node) {
-      return NextResponse.json(
-        { error: 'Name, description, and max_children_per_node are required' },
-        { status: 400 }
-      )
+    if (!response.ok) {
+      throw new Error(`Go service responded with status: ${response.status}`)
     }
 
-    const query = `
-      INSERT INTO genealogy_types (name, description, max_children_per_node, rules, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, NOW(), NOW())
-      RETURNING id, name, description, max_children_per_node, rules, is_active, created_at, updated_at
-    `
-    
-    const values = [name, description, max_children_per_node, JSON.stringify(rules || {})]
-    const result = await pool.query(query, values)
-    
-    return NextResponse.json(result.rows[0])
+    const data = await response.json()
+    return NextResponse.json(data)
   } catch (error) {
     console.error('Error creating genealogy type:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to create genealogy type' },
       { status: 500 }
     )
   }

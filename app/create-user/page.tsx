@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowLeft, UserPlus, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import Header from '@/components/header'
 
 const countries = [
   'United States', 'India', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Brazil', 'Japan', 'China',
@@ -142,24 +143,8 @@ export default function CreateUserPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Dashboard
-                </Button>
-              </Link>
-            </div>
-            <div className="flex items-center space-x-4">
-              <UserPlus className="h-5 w-5 text-primary" />
-              <span className="font-medium">Create User</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header title="Create User" showBackButton backUrl="/" />
+
       <main className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <Card>
@@ -198,39 +183,63 @@ export default function CreateUserPage() {
                     <SelectContent>
                       <SelectItem value="user">User</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
-                      {user.role === 'system_admin' && <SelectItem value="system_admin">System Admin</SelectItem>}
+                      {user?.role === 'system_admin' && (
+                        <SelectItem value="system_admin">System Admin</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   {fieldErrors.role && <div className="text-sm text-red-600">{fieldErrors.role}</div>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="whatsapp_number">WhatsApp Number (with country code) *</Label>
-                  <Input id="whatsapp_number" name="whatsapp_number" value={form.whatsapp_number} onChange={handleChange} placeholder="e.g. +1234567890" required />
+                  <Label htmlFor="whatsapp_number">WhatsApp Number *</Label>
+                  <Input 
+                    id="whatsapp_number" 
+                    name="whatsapp_number" 
+                    value={form.whatsapp_number} 
+                    onChange={handleChange} 
+                    placeholder="+1234567890"
+                    required 
+                  />
                   {fieldErrors.whatsapp_number && <div className="text-sm text-red-600">{fieldErrors.whatsapp_number}</div>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="organization_name">Organization Name</Label>
-                  <Input id="organization_name" name="organization_name" value={form.organization_name} onChange={handleChange} />
+                  <Input 
+                    id="organization_name" 
+                    name="organization_name" 
+                    value={form.organization_name} 
+                    onChange={handleChange} 
+                    placeholder="Enter organization name (optional)"
+                  />
                   {fieldErrors.organization_name && <div className="text-sm text-red-600">{fieldErrors.organization_name}</div>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="country">Country</Label>
                   <Select value={form.country} onValueChange={handleCountryChange}>
                     <SelectTrigger id="country">
-                      <SelectValue placeholder="Select country" />
+                      <SelectValue placeholder="Select country (optional)" />
                     </SelectTrigger>
                     <SelectContent>
                       {countries.map((country) => (
-                        <SelectItem key={country} value={country}>{country}</SelectItem>
+                        <SelectItem key={country} value={country}>
+                          {country}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {fieldErrors.country && <div className="text-sm text-red-600">{fieldErrors.country}</div>}
                 </div>
-                {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">{error}</div>}
-                {success && <div className="text-sm text-green-600 bg-green-50 p-3 rounded-md">{success}</div>}
-                <Button type="submit" className="w-full" disabled={loading}>
-                  <UserPlus className="h-4 w-4 mr-2" />
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{error}</p>
+                  </div>
+                )}
+                {success && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm text-green-600">{success}</p>
+                  </div>
+                )}
+                <Button type="submit" disabled={loading} className="w-full">
                   {loading ? 'Creating...' : 'Create User'}
                 </Button>
               </form>

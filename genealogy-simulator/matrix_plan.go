@@ -114,7 +114,7 @@ func (m *MatrixPlanSimulator) createNode(userID, genealogyTypeID, cycle, cyclePo
 		RightBound:      rightBound,
 		Depth:           depth,
 		Position:        position,
-		SimulationID:    m.simulationID,
+		SimulationID:    &m.simulationID,
 		PayoutCycle:     cycle,
 		CyclePosition:   cyclePosition,
 		CreatedAt:       time.Now(),

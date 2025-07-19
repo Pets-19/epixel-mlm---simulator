@@ -6,67 +6,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Lock, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import Header from '@/components/header'
 
 export default function ChangePasswordPage() {
   const { user, logout } = useAuth()
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [form, setForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setMessage('')
-    setError('')
-
-    // Validation
-    if (newPassword !== confirmPassword) {
-      setError('New passwords do not match')
-      setLoading(false)
-      return
-    }
-
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters long')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const token = localStorage.getItem('auth_token')
-      const response = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setMessage('Password updated successfully!')
-        setCurrentPassword('')
-        setNewPassword('')
-        setConfirmPassword('')
-      } else {
-        setError(data.error || 'Failed to update password')
-      }
-    } catch (error) {
-      setError('An error occurred while updating password')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({})
 
   if (!user) {
     return (
@@ -82,155 +39,158 @@ export default function ChangePasswordPage() {
     )
   }
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value })
+    setFieldErrors({ ...fieldErrors, [e.target.name]: '' })
+  }
+
+  const validate = () => {
+    const errors: { [key: string]: string } = {}
+    if (!form.currentPassword) errors.currentPassword = 'Current password is required.'
+    if (!form.newPassword) errors.newPassword = 'New password is required.'
+    else if (form.newPassword.length < 6) errors.newPassword = 'New password must be at least 6 characters.'
+    if (!form.confirmPassword) errors.confirmPassword = 'Please confirm your new password.'
+    else if (form.newPassword !== form.confirmPassword) errors.confirmPassword = 'Passwords do not match.'
+    return errors
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setSuccess(null)
+    setLoading(true)
+    const errors = validate()
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setLoading(false)
+      return
+    }
+    try {
+      const token = localStorage.getItem('auth_token')
+      const res = await fetch('/api/auth/change-password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword: form.currentPassword,
+          newPassword: form.newPassword,
+        })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSuccess('Password changed successfully!')
+        setForm({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        })
+      } else {
+        setError(data.error || 'Failed to change password')
+      }
+    } catch (err) {
+      setError('An error occurred while changing password')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <Link href="/profile">
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Profile
-                </Button>
-              </Link>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-700">
-                <span className="font-medium">{user.name}</span>
-              </div>
-              <Button variant="outline" size="sm" onClick={logout}>
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header title="Change Password" showBackButton backUrl="/profile" />
 
-      {/* Main Content */}
       <main className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Change Password</h1>
-            <p className="mt-2 text-gray-600">
-              Update your password to keep your account secure.
-            </p>
-          </div>
-
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <Lock className="h-5 w-5 mr-2" />
-                Update Password
-              </CardTitle>
-              <CardDescription>
-                Enter your current password and choose a new one.
-              </CardDescription>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>Update your password to keep your account secure.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="currentPassword">Current Password</Label>
                   <div className="relative">
-                    <Input
-                      id="currentPassword"
-                      type={showCurrentPassword ? "text" : "password"}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      required
+                    <Input 
+                      id="currentPassword" 
+                      name="currentPassword" 
+                      type={showCurrentPassword ? 'text' : 'password'} 
+                      value={form.currentPassword} 
+                      onChange={handleChange} 
+                      required 
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" 
+                      onClick={() => setShowCurrentPassword(v => !v)}
                     >
-                      {showCurrentPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                  {fieldErrors.currentPassword && <div className="text-sm text-red-600">{fieldErrors.currentPassword}</div>}
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="newPassword">New Password</Label>
                   <div className="relative">
-                    <Input
-                      id="newPassword"
-                      type={showNewPassword ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
+                    <Input 
+                      id="newPassword" 
+                      name="newPassword" 
+                      type={showNewPassword ? 'text' : 'password'} 
+                      value={form.newPassword} 
+                      onChange={handleChange} 
+                      required 
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" 
+                      onClick={() => setShowNewPassword(v => !v)}
                     >
-                      {showNewPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Password must be at least 6 characters long.
-                  </p>
+                  {fieldErrors.newPassword && <div className="text-sm text-red-600">{fieldErrors.newPassword}</div>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
                   <div className="relative">
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
+                    <Input 
+                      id="confirmPassword" 
+                      name="confirmPassword" 
+                      type={showConfirmPassword ? 'text' : 'password'} 
+                      value={form.confirmPassword} 
+                      onChange={handleChange} 
+                      required 
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent" 
+                      onClick={() => setShowConfirmPassword(v => !v)}
                     >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                  {fieldErrors.confirmPassword && <div className="text-sm text-red-600">{fieldErrors.confirmPassword}</div>}
                 </div>
-
-                {message && (
-                  <div className="text-sm text-green-600 bg-green-50 p-3 rounded-md">
-                    {message}
-                  </div>
-                )}
-
                 {error && (
-                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
-                    {error}
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{error}</p>
                   </div>
                 )}
-
-                <Button 
-                  type="submit" 
-                  disabled={loading}
-                  className="w-full"
-                >
-                  <Lock className="h-4 w-4 mr-2" />
-                  {loading ? 'Updating Password...' : 'Update Password'}
+                {success && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm text-green-600">{success}</p>
+                  </div>
+                )}
+                <Button type="submit" disabled={loading} className="w-full">
+                  <Save className="h-4 w-4 mr-2" />
+                  {loading ? 'Changing...' : 'Change Password'}
                 </Button>
               </form>
             </CardContent>

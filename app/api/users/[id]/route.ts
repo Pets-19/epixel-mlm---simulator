@@ -198,4 +198,76 @@ export async function PUT(
       { status: 500 }
     )
   }
+}
+
+// Delete user
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Check authentication
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const token = authHeader.substring(7)
+    const decoded = verifyToken(token)
+    if (!decoded) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Check if user has admin or system_admin role
+    if (decoded.role !== 'admin' && decoded.role !== 'system_admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const userId = parseInt(params.id)
+    if (isNaN(userId)) {
+      return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })
+    }
+
+    // Check if user exists and get their role
+    const userCheckQuery = 'SELECT id, role FROM users WHERE id = $1'
+    const userCheckResult = await pool.query(userCheckQuery, [userId])
+    
+    if (userCheckResult.rows.length === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    const userToDelete = userCheckResult.rows[0]
+
+    // Prevent deletion of system_admin users
+    if (userToDelete.role === 'system_admin') {
+      return NextResponse.json(
+        { error: 'Cannot delete system admin users' },
+        { status: 403 }
+      )
+    }
+
+    // Prevent users from deleting themselves
+    if (decoded.userId === userId) {
+      return NextResponse.json(
+        { error: 'Cannot delete your own account' },
+        { status: 403 }
+      )
+    }
+
+    // Delete user
+    const deleteQuery = 'DELETE FROM users WHERE id = $1'
+    const result = await pool.query(deleteQuery, [userId])
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ message: 'User deleted successfully' })
+  } catch (error) {
+    console.error('Error deleting user:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
 } 

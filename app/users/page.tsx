@@ -35,8 +35,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { ChevronLeft, ChevronRight, Search, Edit, Key, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Edit, Key, Plus, Trash2, CheckSquare, Square } from 'lucide-react'
 import Image from 'next/image'
+import Header from '@/components/header'
 
 interface User {
   id: number
@@ -92,6 +93,12 @@ export default function UsersPage() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
   const [resetSuccess, setResetSuccess] = useState('')
+
+  // Bulk delete state
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([])
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false)
+  const [bulkDeleteError, setBulkDeleteError] = useState('')
+  const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState('')
 
   const fetchUsers = async () => {
     try {
@@ -236,6 +243,74 @@ export default function UsersPage() {
     }
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedUsers.length === 0) return
+
+    try {
+      setBulkDeleteLoading(true)
+      setBulkDeleteError('')
+      setBulkDeleteSuccess('')
+      
+      const token = localStorage.getItem('auth_token')
+      const response = await fetch('/api/users/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userIds: selectedUsers })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setBulkDeleteSuccess(data.message)
+        setSelectedUsers([])
+        
+        // Refresh users list
+        fetchUsers()
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setBulkDeleteSuccess('')
+        }, 3000)
+      } else {
+        const error = await response.json()
+        setBulkDeleteError(error.error || 'Failed to delete users')
+      }
+    } catch (error) {
+      setBulkDeleteError('An error occurred while deleting users')
+    } finally {
+      setBulkDeleteLoading(false)
+    }
+  }
+
+  const handleSelectUser = (userId: number) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+
+  const handleSelectAll = () => {
+    const nonSystemAdminUsers = users.filter(user => user.role !== 'system_admin').map(user => user.id)
+    setSelectedUsers(prev => 
+      prev.length === nonSystemAdminUsers.length 
+        ? [] 
+        : nonSystemAdminUsers
+    )
+  }
+
+  const isAllSelected = () => {
+    const nonSystemAdminUsers = users.filter(user => user.role !== 'system_admin')
+    return nonSystemAdminUsers.length > 0 && selectedUsers.length === nonSystemAdminUsers.length
+  }
+
+  const isIndeterminate = () => {
+    const nonSystemAdminUsers = users.filter(user => user.role !== 'system_admin')
+    return selectedUsers.length > 0 && selectedUsers.length < nonSystemAdminUsers.length
+  }
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'system_admin':
@@ -276,36 +351,18 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
-              <a href="/" className="flex items-center space-x-2">
-                <Image
-                  src="https://assets.epixelmlmsoftware.com/sites/all/themes/epixel_v13/epixel-mlm-software-new-logo.svg"
-                  alt="Epixel MLM Tools"
-                  width={200}
-                  height={50}
-                />
-              </a>
-              <div className="text-xl font-semibold text-gray-900">User Management</div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <a href="/dashboard">
-                <Button variant="outline">Dashboard</Button>
-              </a>
-              <a href="/create-user">
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create User
-                </Button>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <Header title="User Management">
+        <a href="/">
+          <Button variant="outline">Dashboard</Button>
+        </a>
+        <a href="/create-user">
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            Create User
+          </Button>
+        </a>
+      </Header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
@@ -364,11 +421,78 @@ export default function UsersPage() {
 
         {/* Users Table */}
         <Card>
+          {selectedUsers.length === 0 && (
+            <div className="px-6 py-3 bg-blue-50 border-b">
+              <p className="text-sm text-blue-700">
+                💡 Select users using the checkboxes to enable bulk delete. System admin users cannot be deleted.
+              </p>
+            </div>
+          )}
           <CardHeader>
-            <CardTitle>Users ({pagination.total})</CardTitle>
-            <CardDescription>
-              Manage all users in the system
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Users ({pagination.total})</CardTitle>
+                            <CardDescription>
+              Manage all users in the system. System admin users are protected from deletion.
             </CardDescription>
+              </div>
+              {selectedUsers.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">
+                    {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''} selected
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedUsers([])}
+                  >
+                    Clear Selection
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" disabled={bulkDeleteLoading}>
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {bulkDeleteLoading ? 'Deleting...' : `Delete ${selectedUsers.length}`}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Users</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}? 
+                          This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      {bulkDeleteError && (
+                        <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md">
+                          {bulkDeleteError}
+                        </div>
+                      )}
+                      {bulkDeleteSuccess && (
+                        <div className="text-sm text-green-600 bg-green-50 p-3 rounded-md">
+                          {bulkDeleteSuccess}
+                        </div>
+                      )}
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => {
+                          setBulkDeleteError('')
+                          setBulkDeleteSuccess('')
+                        }}>
+                          Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleBulkDelete}
+                          disabled={bulkDeleteLoading}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          {bulkDeleteLoading ? 'Deleting...' : 'Delete Users'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -379,6 +503,22 @@ export default function UsersPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleSelectAll}
+                            className="h-6 w-6 p-0"
+                          >
+                            {isAllSelected() ? (
+                              <CheckSquare className="h-4 w-4" />
+                            ) : isIndeterminate() ? (
+                              <div className="h-4 w-4 border-2 border-gray-400 bg-gray-400 rounded-sm" />
+                            ) : (
+                              <Square className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
@@ -390,8 +530,33 @@ export default function UsersPage() {
                     </TableHeader>
                     <TableBody>
                       {users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableRow key={user.id} className={user.role === 'system_admin' ? 'bg-gray-50' : ''}>
+                          <TableCell>
+                            {user.role !== 'system_admin' ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleSelectUser(user.id)}
+                                className="h-6 w-6 p-0"
+                              >
+                                {selectedUsers.includes(user.id) ? (
+                                  <CheckSquare className="h-4 w-4" />
+                                ) : (
+                                  <Square className="h-4 w-4" />
+                                )}
+                              </Button>
+                            ) : (
+                              <div className="h-6 w-6 flex items-center justify-center">
+                                <span className="text-xs text-gray-400">-</span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {user.name}
+                            {user.role === 'system_admin' && (
+                              <span className="ml-2 text-xs text-gray-500">(Protected)</span>
+                            )}
+                          </TableCell>
                           <TableCell>{user.email}</TableCell>
                           <TableCell>
                             <Badge className={getRoleBadgeColor(user.role)}>

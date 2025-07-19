@@ -14,12 +14,22 @@ func main() {
 	InitDB()
 	defer db.Close()
 
+	// Initialize services
+	// Settings service removed
+
 	r := mux.NewRouter()
 
 	// API routes
 	r.HandleFunc("/api/genealogy/simulate", handleSimulation).Methods("POST")
 	r.HandleFunc("/api/genealogy/types", handleGetGenealogyTypes).Methods("GET")
 	r.HandleFunc("/api/genealogy/save-simulation", handleSaveSimulation).Methods("POST")
+
+	// Genealogy Management API routes
+	r.HandleFunc("/api/genealogy/generate-users", handleGenerateUsers).Methods("POST")
+	r.HandleFunc("/api/genealogy/downline/{parent_id}", handleGetDownlineUsers).Methods("GET")
+	r.HandleFunc("/api/genealogy/upline/{node_id}", handleGetUplineUsers).Methods("GET")
+	r.HandleFunc("/api/genealogy/structure/{genealogy_type_id}", handleGetGenealogyStructure).Methods("GET")
+	r.HandleFunc("/api/genealogy/add-user", handleAddUserToGenealogy).Methods("POST")
 
 	// CORS middleware
 	r.Use(corsMiddleware)
