@@ -13,6 +13,9 @@ services:
       - ./database/init.sql:/docker-entrypoint-initdb.d/02-init.sql
       - ./database/migration_genealogy.sql:/docker-entrypoint-initdb.d/03-migration_genealogy.sql
       - ./database/insert_genealogy_types.sql:/docker-entrypoint-initdb.d/04-insert_genealogy_types.sql
+      - ./database/migration_business_user_role.sql:/docker-entrypoint-initdb.d/05-migration_business_user_role.sql
+      - ./database/migration_business_plan_tables.sql:/docker-entrypoint-initdb.d/06-migration_business_plan_tables.sql
+      - ./database/migration_add_product_sales_ratio.sql:/docker-entrypoint-initdb.d/07-migration_add_product_sales_ratio.sql
 
     ports:
       - "5432:5432"

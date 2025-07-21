@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
       errors.push('Password must be at least 6 characters long')
     }
 
-    if (!role || !['system_admin', 'admin', 'user'].includes(role)) {
-      errors.push('Valid role is required (system_admin, admin, or user)')
+    if (!role || !['system_admin', 'admin', 'user', 'business_user'].includes(role)) {
+      errors.push('Valid role is required (system_admin, admin, user, or business_user)')
     }
 
     // Role restrictions

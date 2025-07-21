@@ -189,6 +189,19 @@ export default function Dashboard() {
                 </Card>
               </Link>
 
+              <Link href="/business-plan-wizard" className="block">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <GitBranch className="h-5 w-5 mr-2" />
+                      Business Plan Wizard
+                    </CardTitle>
+                    <CardDescription>
+                      Create business plan simulations for business users with products and genealogy configuration.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
 
             </div>
           )}

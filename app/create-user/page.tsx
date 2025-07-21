@@ -183,6 +183,7 @@ export default function CreateUserPage() {
                     <SelectContent>
                       <SelectItem value="user">User</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="business_user">Business User</SelectItem>
                       {user?.role === 'system_admin' && (
                         <SelectItem value="system_admin">System Admin</SelectItem>
                       )}

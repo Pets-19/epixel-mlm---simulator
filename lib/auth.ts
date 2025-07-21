@@ -6,7 +6,7 @@ export interface User {
   id: number
   email: string
   name: string
-  role: 'system_admin' | 'admin' | 'user'
+  role: 'system_admin' | 'admin' | 'user' | 'business_user'
   whatsapp_number?: string
   organization_name?: string
   country?: string
@@ -23,7 +23,7 @@ export interface UserCreate {
   email: string
   name: string
   password: string
-  role: 'system_admin' | 'admin' | 'user'
+  role: 'system_admin' | 'admin' | 'user' | 'business_user'
   whatsapp_number: string
   organization_name?: string
   country?: string

@@ -1,643 +1,393 @@
-# MLM Genealogy System Technical Documentation
+# MLM Tools - Technical Documentation
 
 ## Table of Contents
 1. [System Architecture](#system-architecture)
-2. [Database Schema](#database-schema)
-3. [Genealogy Plan Types](#genealogy-plan-types)
+2. [Technology Stack](#technology-stack)
+3. [Database Schema](#database-schema)
 4. [API Endpoints](#api-endpoints)
-5. [Simulation Logic](#simulation-logic)
-6. [Data Flow](#data-flow)
-7. [Error Handling](#error-handling)
-8. [Deployment](#deployment)
-9. [Testing](#testing)
+5. [Authentication & Authorization](#authentication--authorization)
+6. [Component Architecture](#component-architecture)
+7. [Business Logic](#business-logic)
+8. [Deployment & Infrastructure](#deployment--infrastructure)
+9. [Development Guidelines](#development-guidelines)
 
 ## System Architecture
 
 ### Overview
-The MLM Genealogy System is a microservices-based application consisting of:
+The MLM Tools platform is a multi-service application built with:
+- **Frontend**: Next.js 14 with App Router and Server Components
+- **Backend**: Go services for genealogy simulation
+- **Database**: PostgreSQL with strong schema design
+- **Containerization**: Docker Compose for orchestration
 
-- **Go Backend Service** (`genealogy-simulator`): Handles genealogy logic, user management, and database operations
-- **Next.js Frontend** (`app`): Provides API routes as proxies to the Go backend and user interface
-- **PostgreSQL Database**: Stores genealogy data using the Nested Set Model for efficient tree operations
-- **Docker Compose**: Orchestrates all services
-
-### Technology Stack
-- **Backend**: Go 1.21 with Gorilla Mux for HTTP routing
-- **Frontend**: Next.js 14 with TypeScript
-- **Database**: PostgreSQL 15 with Nested Set Model
-- **Containerization**: Docker and Docker Compose
-- **API**: RESTful JSON APIs
-
-### Service Communication
+### Architecture Diagram
 ```
-Frontend (Next.js) → API Routes → Go Backend → PostgreSQL
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Next.js App   │    │  Go Simulator    │    │   PostgreSQL    │
+│   (Frontend)    │◄──►│   (Backend)      │◄──►│   (Database)    │
+│   Port: 3000    │    │   Port: 8080     │    │   Port: 5432    │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
+
+## Technology Stack
+
+### Frontend (Next.js 14)
+- **Framework**: Next.js 14.2.30 with App Router
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui (Radix UI based)
+- **State Management**: React hooks and context
+- **Authentication**: Custom auth provider with JWT
+
+### Backend (Go)
+- **Language**: Go 1.21
+- **Framework**: Standard library with custom handlers
+- **Concurrency**: Native Go goroutines and channels
+- **Error Handling**: Idiomatic Go error patterns
+
+### Database
+- **Engine**: PostgreSQL (latest stable)
+- **Schema**: Strongly typed with constraints
+- **Migrations**: SQL-based migration files
+- **Connection Pooling**: Built-in connection management
+
+### Infrastructure
+- **Containerization**: Docker with multi-stage builds
+- **Orchestration**: Docker Compose
+- **Networking**: Custom Docker network
+- **Environment**: Alpine Linux for minimal images
 
 ## Database Schema
 
 ### Core Tables
 
-#### `genealogy_types`
-Stores different genealogy plan configurations:
+#### users
 ```sql
-CREATE TABLE genealogy_types (
+CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) UNIQUE NOT NULL,
-    description TEXT,
-    max_children_per_node INTEGER NOT NULL DEFAULT 2,
-    rules JSONB NOT NULL DEFAULT '{}',
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'user', 'business_user')),
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
-#### `genealogy_nodes`
-Implements the Nested Set Model for efficient tree operations:
+#### genealogy_types
 ```sql
-CREATE TABLE genealogy_nodes (
+CREATE TABLE genealogy_types (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    genealogy_type_id INTEGER REFERENCES genealogy_types(id) ON DELETE CASCADE,
-    parent_id INTEGER REFERENCES genealogy_nodes(id) ON DELETE CASCADE,
-    
-    -- Nested Set Model fields
-    left_bound INTEGER NOT NULL,
-    right_bound INTEGER NOT NULL,
-    depth INTEGER NOT NULL DEFAULT 0,
-    
-    -- Node position within parent
-    position VARCHAR(20) NOT NULL DEFAULT 'left',
-    
-    -- Simulation and cycle tracking
-    simulation_id VARCHAR(100),
-    payout_cycle INTEGER NOT NULL DEFAULT 1,
-    cycle_position INTEGER NOT NULL DEFAULT 1,
-    
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Indexes for performance
-    UNIQUE(user_id, genealogy_type_id),
-    UNIQUE(left_bound, right_bound, genealogy_type_id)
-);
-```
-
-#### `users`
-Stores user information:
-```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'user',
-    whatsapp_number VARCHAR(20) UNIQUE,
-    organization_name VARCHAR(255),
-    country VARCHAR(100),
+    description TEXT,
+    config_schema JSONB,
+    is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ```
 
-### Nested Set Model
-The system uses the Nested Set Model for efficient tree operations:
-
-- **left_bound**: Left boundary value for the node
-- **right_bound**: Right boundary value for the node
-- **depth**: Tree depth level (0 for root)
-- **Benefits**: Efficient queries for ancestors, descendants, and tree traversal
-
-## Genealogy Plan Types
-
-### 1. Binary Plan
-- **Max Children**: 2 per parent
-- **Filling Strategy**: Left to right, top to bottom
-- **Positions**: "left" and "right"
-- **Rules**: Each parent can have maximum 2 children
-
-**Example Structure:**
-```
-       Root
-      /    \
-   Left   Right
-   /  \   /  \
-  L   R  L   R
+#### genealogy_simulations
+```sql
+CREATE TABLE genealogy_simulations (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    genealogy_type_id INTEGER REFERENCES genealogy_types(id),
+    simulation_data JSONB NOT NULL,
+    status VARCHAR(50) DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
 
-### 2. Matrix Plan
-- **Max Children**: Configurable (default: 3)
-- **Filling Strategy**: Fill parent to capacity, then spill to next available node
-- **Positions**: "child" (no specific left/right distinction)
-- **Rules**: Strict limit per parent, spillover when limit reached
-
-**Example Structure:**
+#### business_plan_simulations
+```sql
+CREATE TABLE business_plan_simulations (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    genealogy_simulation_id VARCHAR(255),
+    business_name VARCHAR(255) NOT NULL,
+    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'completed', 'cancelled')),
+    created_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
-    Root
-   / | \
-  C1 C2 C3 (max 3)
-  |
-  C4 (spilled to C1)
+
+#### business_products
+```sql
+CREATE TABLE business_products (
+    id SERIAL PRIMARY KEY,
+    business_plan_id INTEGER REFERENCES business_plan_simulations(id) ON DELETE CASCADE,
+    product_name VARCHAR(255) NOT NULL,
+    product_price DECIMAL(10,2) NOT NULL CHECK (product_price > 0),
+    business_volume DECIMAL(10,2) NOT NULL CHECK (business_volume >= 0),
+    product_sales_ratio DECIMAL(5,2) NOT NULL CHECK (product_sales_ratio >= 0 AND product_sales_ratio <= 100),
+    product_type VARCHAR(50) NOT NULL CHECK (product_type IN ('membership', 'retail', 'digital')),
+    sort_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 ```
 
-### 3. Unilevel Plan
-- **Max Children**: Configurable (default: 10)
-- **Filling Strategy**: Flexible filling, average-based distribution
-- **Positions**: "child" (no specific left/right distinction)
-- **Rules**: No strict limit, but uses max_children_count as average guideline
-
-**Example Structure:**
-```
-    Root
-   / | \
-  C1 C2 C3 (flexible)
-  |
-  C4 (can add more)
+### Indexes
+```sql
+-- Performance indexes
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_genealogy_simulations_user_id ON genealogy_simulations(user_id);
+CREATE INDEX idx_business_plan_simulations_user_id ON business_plan_simulations(user_id);
+CREATE INDEX idx_business_products_plan_id ON business_products(business_plan_id);
 ```
 
 ## API Endpoints
 
-### Base URL
-- **Go Backend**: `http://localhost:8080/api`
-- **Next.js Frontend**: `http://localhost:3000/api`
-
-### Genealogy Management Endpoints
-
-#### 1. Generate Users
-```http
-POST /api/genealogy/generate-users
+### Authentication Endpoints
+```
+POST   /api/auth/login              - User login
+POST   /api/auth/create-user        - Create new user
+GET    /api/auth/me                 - Get current user
+POST   /api/auth/change-password    - Change password
+GET    /api/auth/profile            - Get user profile
 ```
 
-**Request Body:**
-```json
-{
-  "count": 5,
-  "genealogy_type_id": 1,
-  "parent_id": null,
-  "position": "left",
-  "simulation_id": "optional-sim-id",
-  "payout_cycle": 1,
-  "max_children_count": 2
-}
+### Genealogy Endpoints
+```
+GET    /api/genealogy-types         - Get genealogy types
+POST   /api/genealogy/simulate      - Create simulation
+POST   /api/genealogy/save-simulation - Save simulation
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Generated 5 users and added to genealogy",
-  "data": [
-    {
-      "id": 1,
-      "user_id": 25,
-      "genealogy_type_id": 1,
-      "parent_id": 2,
-      "left_bound": 4,
-      "right_bound": 5,
-      "depth": 1,
-      "position": "left",
-      "simulation_id": null,
-      "payout_cycle": 1,
-      "cycle_position": 1,
-      "user": {
-        "id": 25,
-        "email": "user@example.com",
-        "name": "Generated User 1",
-        "role": "user",
-        "whatsapp_number": "+1234567890"
-      }
-    }
-  ]
-}
+### Business Plan Endpoints
+```
+GET    /api/business-plan/simulations     - Get business plans
+POST   /api/business-plan/simulations     - Create business plan
+GET    /api/business-plan/simulations/:id - Get specific plan
+PUT    /api/business-plan/simulations/:id - Update business plan
+DELETE /api/business-plan/simulations/:id - Delete business plan
 ```
 
-#### 2. Get Downline Users
-```http
-GET /api/genealogy/downline/{parent_id}?genealogy_type_id={type_id}
+### User Management Endpoints
+```
+GET    /api/users                    - Get all users
+GET    /api/users/:id                - Get specific user
+PUT    /api/users/:id                - Update user
+DELETE /api/users/:id                - Delete user
+POST   /api/users/:id/reset-password - Reset user password
+GET    /api/users/business-users     - Get business users
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 3,
-      "user_id": 24,
-      "parent_id": 2,
-      "left_bound": 2,
-      "right_bound": 3,
-      "depth": 1,
-      "position": "left",
-      "user": { ... }
-    }
-  ],
-  "count": 1
-}
+### Go Simulator Endpoints
+```
+POST   /simulate                     - Run genealogy simulation
+GET    /health                       - Health check
 ```
 
-#### 3. Get Upline Users
-```http
-GET /api/genealogy/upline/{node_id}?genealogy_type_id={type_id}
+## Authentication & Authorization
+
+### User Roles
+- **admin**: Full system access, can manage users and business plans
+- **user**: Standard user access, can create simulations
+- **business_user**: Business user access, can be assigned to business plans
+
+### Authentication Flow
+1. User submits login credentials
+2. Server validates credentials against database
+3. JWT token generated and returned
+4. Token stored in client-side storage
+5. Token included in subsequent API requests
+6. Server validates token on protected routes
+
+### Authorization Rules
+- **Admin Routes**: `/admin/*`, `/users/*`, `/business-plan-wizard`
+- **User Routes**: `/genealogy-simulation`, `/profile`
+- **Public Routes**: `/login`, `/register`
+
+## Component Architecture
+
+### Core Components
+
+#### Authentication
+- `AuthProvider`: Context provider for authentication state
+- `LoginPage`: User login form
+- `ProtectedRoute`: Route wrapper for authentication
+
+#### Dashboard
+- `Dashboard`: Main dashboard with navigation
+- `Header`: Application header with user info
+- `LoadingSpinner`: Loading state component
+
+#### Business Plan Wizard
+- `BusinessPlanWizard`: Main wizard container
+- `UserSelectionStep`: Step 1 - User selection/creation
+- `BusinessProductStep`: Step 2 - Business & product configuration
+- `SimulationConfigStep`: Step 3 - Simulation configuration
+- `ReviewStep`: Step 4 - Review and confirmation
+
+#### Genealogy
+- `GenealogyTreeView`: Tree visualization component
+- `GenealogySimulation`: Simulation interface
+
+### UI Components (shadcn/ui)
+- `Button`: Standard button component
+- `Input`: Form input component
+- `Select`: Dropdown selection component
+- `Card`: Content container component
+- `Dialog`: Modal dialog component
+- `Table`: Data table component
+- `Badge`: Status indicator component
+- `RadioGroup`: Radio button group component
+- `Separator`: Visual separator component
+
+## Business Logic
+
+### Genealogy Simulation
+1. **Type Selection**: User selects genealogy type (Matrix, Unilevel, etc.)
+2. **Configuration**: User configures simulation parameters
+3. **Processing**: Go service processes simulation
+4. **Results**: Results displayed in tree view
+5. **Storage**: Simulation can be saved to database
+
+### Business Plan Creation
+1. **User Selection**: Admin selects or creates business user
+2. **Business Configuration**: Define business plan name and products
+3. **Product Setup**: Configure products with pricing, volume, and sales ratio
+4. **Simulation Link**: Link to genealogy simulation
+5. **Review & Create**: Review all inputs and create plan
+
+### Product Management
+- **Product Types**: membership, retail, digital
+- **Pricing**: Product price and business volume
+- **Sales Ratio**: Product purchase rate (0-100%)
+- **Validation**: Client and server-side validation
+
+## Deployment & Infrastructure
+
+### Docker Configuration
+```yaml
+# docker-compose.yml
+services:
+  app:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/epixel_mlm_tools
+    depends_on: [postgres]
+  
+  genealogy-simulator:
+    build: ./genealogy-simulator
+    ports: ["8080:8080"]
+  
+  postgres:
+    image: postgres:latest
+    environment:
+      - POSTGRES_DB=epixel_mlm_tools
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - ./database:/docker-entrypoint-initdb.d
 ```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 2,
-      "user_id": 6,
-      "parent_id": null,
-      "left_bound": 1,
-      "right_bound": 8,
-      "depth": 0,
-      "position": "root",
-      "user": { ... }
-    }
-  ],
-  "count": 1
-}
-```
-
-#### 4. Get Genealogy Structure
-```http
-GET /api/genealogy/structure/{genealogy_type_id}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "nodes": [...],
-    "tree_structure": {
-      "root": {
-        "id": 2,
-        "user_id": 6,
-        "children": [
-          {
-            "id": 3,
-            "user_id": 24,
-            "children": []
-          }
-        ]
-      },
-      "total_nodes": 3
-    }
-  }
-}
-```
-
-#### 5. Add User to Genealogy
-```http
-POST /api/genealogy/add-user
-```
-
-**Request Body:**
-```json
-{
-  "user_id": 30,
-  "genealogy_type_id": 1,
-  "parent_id": 2,
-  "position": "right",
-  "simulation_id": "sim-123",
-  "payout_cycle": 1,
-  "cycle_position": 2
-}
-```
-
-### Simulation Endpoints
-
-#### 1. Run Simulation
-```http
-POST /api/genealogy/simulate
-```
-
-**Request Body:**
-```json
-{
-  "genealogy_type_id": 1,
-  "max_expected_users": 10,
-  "payout_cycle_type": "weekly",
-  "number_of_cycles": 2,
-  "max_children_count": 2
-}
-```
-
-**Response:**
-```json
-{
-  "simulation_id": "8d218bc8-7a4c-4d35-8dd0-3d48d37c90f9",
-  "genealogy_type_id": 1,
-  "max_expected_users": 10,
-  "payout_cycle_type": "weekly",
-  "number_of_cycles": 2,
-  "users_per_cycle": 5,
-  "total_nodes_generated": 10,
-  "nodes": [...],
-  "cycles": [
-    {
-      "cycle_number": 1,
-      "start_user": 1,
-      "end_user": 5,
-      "users_in_cycle": 5,
-      "nodes_in_cycle": [...]
-    }
-  ],
-  "tree_structure": {
-    "root": { ... },
-    "total_nodes": 10
-  },
-  "created_at": "2025-07-19T11:54:51.891991049Z"
-}
-```
-
-#### 2. Get Genealogy Types
-```http
-GET /api/genealogy/types
-```
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "Binary Plan",
-    "description": "Binary tree structure...",
-    "max_children_per_node": 2,
-    "rules": {
-      "type": "binary",
-      "max_children": 2,
-      "child_positions": ["left", "right"]
-    },
-    "is_active": true
-  }
-]
-```
-
-## Simulation Logic
-
-### Overview
-The simulation system distributes users across payout cycles and generates genealogy nodes according to the selected plan type.
-
-### Process Flow
-
-1. **Request Validation**
-   - Validate genealogy type exists
-   - Check parameter constraints
-   - Generate unique simulation ID
-
-2. **Plan Selection**
-   - Binary Plan: Uses `BinaryPlanSimulator`
-   - Matrix Plan: Uses `MatrixPlanSimulator`
-   - Unilevel Plan: Uses `UnilevelPlanSimulator`
-
-3. **User Distribution**
-   - Calculate users per cycle: `max_expected_users / number_of_cycles`
-   - Distribute users across cycles
-   - Handle remainder users
-
-4. **Node Generation**
-   - Create nodes for each user
-   - Apply plan-specific filling rules
-   - Calculate nested set bounds
-   - Assign positions and depths
-
-5. **Tree Construction**
-   - Build hierarchical structure
-   - Validate tree integrity
-   - Generate tree visualization
-
-### Plan-Specific Logic
-
-#### Binary Plan Simulator
-```go
-type BinaryPlanSimulator struct {
-    simulationID  string
-    nodes         []GenealogyNode
-    nextLeftBound int
-}
-```
-
-**Filling Rules:**
-- Each parent can have maximum 2 children
-- First child: position "left"
-- Second child: position "right"
-- Fill from top to bottom, left to right
-
-#### Matrix Plan Simulator
-```go
-type MatrixPlanSimulator struct {
-    simulationID     string
-    nodes            []GenealogyNode
-    nextLeftBound    int
-    maxChildrenCount int
-}
-```
-
-**Filling Rules:**
-- Strict limit per parent (maxChildrenCount)
-- When parent reaches limit, spill to next available node
-- All positions are "child"
-
-#### Unilevel Plan Simulator
-```go
-type UnilevelPlanSimulator struct {
-    simulationID     string
-    nodes            []GenealogyNode
-    nextLeftBound    int
-    maxChildrenCount int
-}
-```
-
-**Filling Rules:**
-- No strict limit per parent
-- Uses maxChildrenCount as average guideline
-- Flexible distribution across nodes
-
-## Data Flow
-
-### User Generation Flow
-```
-1. Frontend Request → Next.js API Route
-2. Next.js → Go Backend (proxy)
-3. Go Backend → Database (create user)
-4. Go Backend → Database (add to genealogy)
-5. Go Backend → Next.js → Frontend Response
-```
-
-### Simulation Flow
-```
-1. Frontend Request → Next.js API Route
-2. Next.js → Go Backend (proxy)
-3. Go Backend → Select Simulator
-4. Simulator → Generate Nodes
-5. Simulator → Build Tree Structure
-6. Go Backend → Next.js → Frontend Response
-```
-
-### Tree Query Flow
-```
-1. Frontend Request → Next.js API Route
-2. Next.js → Go Backend (proxy)
-3. Go Backend → Database (nested set query)
-4. Go Backend → Process Results
-5. Go Backend → Next.js → Frontend Response
-```
-
-## Error Handling
-
-### HTTP Status Codes
-- `200`: Success
-- `400`: Bad Request (invalid parameters)
-- `404`: Not Found (resource not found)
-- `500`: Internal Server Error (database/processing errors)
-
-### Error Response Format
-```json
-{
-  "error": "Error message description"
-}
-```
-
-### Common Error Scenarios
-1. **Invalid Genealogy Type**: Returns 400 with "Invalid genealogy type"
-2. **Database Connection**: Returns 500 with database error
-3. **Invalid Parameters**: Returns 400 with parameter validation error
-4. **Node Not Found**: Returns 404 for tree queries
-
-### Logging
-- Go backend logs all operations with timestamps
-- Database errors are logged with details
-- Simulation progress is logged
-- Node insertion/deletion operations are tracked
-
-## Deployment
-
-### Prerequisites
-- Docker and Docker Compose
-- PostgreSQL 15
-- Go 1.21+
-- Node.js 18+
 
 ### Environment Variables
 ```bash
 # Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=epixel_mlm_tools
-DB_USER=postgres
-DB_PASSWORD=password
+DATABASE_URL=postgresql://postgres:password@localhost:5432/epixel_mlm_tools
 
-# Services
-GO_API_URL=http://localhost:8080
-PORT=8080
+# JWT
+JWT_SECRET=your-secret-key
+
+# Go Simulator
+SIMULATOR_URL=http://localhost:8080
 ```
 
-### Docker Compose Setup
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: epixel_mlm_tools
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+### Migration Strategy
+1. **SQL Files**: Each migration in separate SQL file
+2. **Versioning**: Migrations run in order by filename
+3. **Rollback**: Manual rollback process
+4. **Testing**: Migrations tested in development first
 
-  genealogy-simulator:
-    build: ./genealogy-simulator
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-    environment:
-      - DB_HOST=postgres
+## Development Guidelines
 
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    depends_on:
-      - genealogy-simulator
-    environment:
-      - GO_API_URL=http://genealogy-simulator:8080
-```
+### Code Standards
+- **TypeScript**: Strict mode enabled
+- **ESLint**: Code linting and formatting
+- **Prettier**: Code formatting
+- **Git Hooks**: Pre-commit validation
 
-### Deployment Steps
-1. **Clone Repository**
-   ```bash
-   git clone <repository-url>
-   cd mlm-tools
-   ```
+### Component Guidelines
+- **Functional Components**: Use functional components with hooks
+- **TypeScript**: Full type safety for all components
+- **Props Interface**: Define interfaces for all component props
+- **Error Boundaries**: Implement error boundaries for critical components
 
-2. **Build and Start Services**
-   ```bash
-   docker compose up -d
-   ```
+### API Guidelines
+- **RESTful**: Follow REST conventions
+- **Validation**: Input validation on all endpoints
+- **Error Handling**: Consistent error response format
+- **Authentication**: JWT token validation
 
-3. **Initialize Database**
-   ```bash
-   docker compose exec postgres psql -U postgres -d epixel_mlm_tools -f /docker-entrypoint-initdb.d/init.sql
-   ```
+### Database Guidelines
+- **Constraints**: Use database constraints for data integrity
+- **Indexes**: Create indexes for performance
+- **Migrations**: Version control all schema changes
+- **Backup**: Regular database backups
 
-4. **Verify Services**
-   ```bash
-   docker compose ps
-   curl http://localhost:8080/api/genealogy/types
-   ```
+### Testing Strategy
+- **Unit Tests**: Component and function testing
+- **Integration Tests**: API endpoint testing
+- **E2E Tests**: Full user flow testing
+- **Database Tests**: Schema and migration testing
 
-## Testing
+### Security Considerations
+- **Input Validation**: Validate all user inputs
+- **SQL Injection**: Use parameterized queries
+- **XSS Protection**: Sanitize user-generated content
+- **Authentication**: Secure JWT implementation
+- **Authorization**: Role-based access control
 
-### Manual Testing
-1. **Generate Users**
-   ```bash
-   curl -X POST http://localhost:8080/api/genealogy/generate-users \
-     -H "Content-Type: application/json" \
-     -d '{"count": 3, "genealogy_type_id": 1, "payout_cycle": 1}'
-   ```
+### Performance Optimization
+- **Database**: Optimize queries with proper indexes
+- **Frontend**: Code splitting and lazy loading
+- **Caching**: Implement appropriate caching strategies
+- **CDN**: Use CDN for static assets
 
-2. **Run Simulation**
-   ```bash
-   curl -X POST http://localhost:8080/api/genealogy/simulate \
-     -H "Content-Type: application/json" \
-     -d '{"genealogy_type_id": 1, "max_expected_users": 10, "payout_cycle_type": "weekly", "number_of_cycles": 2}'
-   ```
+## Monitoring & Logging
 
-3. **Query Tree Structure**
-   ```bash
-   curl -X GET "http://localhost:8080/api/genealogy/structure/1"
-   ```
+### Application Logs
+- **Next.js**: Built-in logging
+- **Go**: Structured logging
+- **PostgreSQL**: Query logging
 
-### Automated Testing
-- Unit tests for simulators
-- Integration tests for API endpoints
-- Database migration tests
-- Performance tests for large trees
+### Health Checks
+- **Application**: `/api/health`
+- **Database**: Connection pool status
+- **Go Simulator**: `/health`
 
-### Performance Considerations
-- Nested Set Model provides O(log n) tree queries
-- Indexes on left_bound, right_bound for efficient traversal
-- Connection pooling for database operations
-- Caching for frequently accessed tree structures
+### Error Tracking
+- **Client-side**: Error boundaries and logging
+- **Server-side**: API error responses
+- **Database**: Constraint violations
 
-## Conclusion
+## Future Considerations
 
-The MLM Genealogy System provides a robust, scalable solution for managing genealogy structures with support for multiple plan types. The system uses modern technologies and follows best practices for performance, maintainability, and extensibility.
+### Scalability
+- **Horizontal Scaling**: Load balancer configuration
+- **Database**: Read replicas and connection pooling
+- **Caching**: Redis for session and data caching
 
-Key Features:
-- ✅ Binary, Matrix, and Unilevel plan support
-- ✅ Efficient nested set model implementation
-- ✅ RESTful API endpoints
-- ✅ Comprehensive simulation capabilities
-- ✅ Docker-based deployment
-- ✅ Detailed logging and error handling
-- ✅ Scalable architecture
+### Features
+- **Real-time Updates**: WebSocket integration
+- **File Upload**: Document and image upload
+- **Reporting**: Advanced analytics and reporting
+- **Mobile**: Progressive Web App (PWA)
 
-The system is ready for production use and can be extended with additional plan types and features as needed. 
+### Integration
+- **Third-party APIs**: Payment gateways, email services
+- **External Systems**: CRM, accounting software
+- **Webhooks**: Event-driven integrations
+
+---
+
+*This documentation should be updated with each major feature addition or architectural change.* 
