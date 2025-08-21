@@ -21,6 +21,7 @@ func main() {
 
 	// API routes
 	r.HandleFunc("/api/genealogy/simulate", handleSimulation).Methods("POST")
+	r.HandleFunc("/api/genealogy/business-simulate", handleBusinessSimulation).Methods("POST")
 	r.HandleFunc("/api/genealogy/types", handleGetGenealogyTypes).Methods("GET")
 	r.HandleFunc("/api/genealogy/save-simulation", handleSaveSimulation).Methods("POST")
 

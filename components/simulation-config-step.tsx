@@ -9,13 +9,13 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Loader2, Play, CheckCircle, AlertCircle, Users, TrendingUp, Calendar, GitBranch, Package, Settings } from 'lucide-react'
 import { SimulationConfig, BusinessProduct } from '@/lib/business-plan'
-import { SimulationEngine, SimulationResult, SimulationConfigExtended } from '@/lib/simulation-engine'
+// Removed SimulationEngine import - now using Go API
 
 interface SimulationConfigStepProps {
   config: SimulationConfig | null
   products: BusinessProduct[]
   onConfigChange: (config: SimulationConfig) => void
-  onSimulationComplete?: (simulationResult: SimulationResult) => void
+  onSimulationComplete?: (simulationResult: any) => void
 }
 
 export default function SimulationConfigStep({ 
@@ -36,7 +36,7 @@ export default function SimulationConfigStep({
   const [loading, setLoading] = useState(false)
   const [simulating, setSimulating] = useState(false)
   const [simulationProgress, setSimulationProgress] = useState<{ current: number; total: number; percentage: number } | null>(null)
-  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null)
+  const [simulationResult, setSimulationResult] = useState<any | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
@@ -129,17 +129,39 @@ export default function SimulationConfigStep({
     setSimulationProgress({ current: 0, total: localConfig.max_expected_users, percentage: 0 })
 
     try {
-      // Create extended config with products
-      const extendedConfig: SimulationConfigExtended = {
-        ...localConfig,
-        products
+      // Prepare request for Go API
+      const simulationRequest = {
+        genealogy_type: localConfig.genealogy_type,
+        max_expected_users: localConfig.max_expected_users,
+        payout_cycle: localConfig.payout_cycle,
+        number_of_payout_cycles: localConfig.number_of_payout_cycles,
+        max_children_count: localConfig.max_children_count,
+        products: products.map((product, index) => ({
+          id: index + 1,
+          product_name: product.product_name,
+          product_price: product.product_price,
+          business_volume: product.business_volume,
+          product_sales_ratio: product.product_sales_ratio,
+          product_type: product.product_type,
+          sort_order: index + 1,
+          is_active: true
+        }))
       }
 
-      // Create and run simulation engine
-      const simulationEngine = new SimulationEngine(extendedConfig)
-      
-      // Run simulation
-      const result = await simulationEngine.runSimulation()
+      // Call Go API for business simulation
+      const response = await fetch('http://localhost:8080/api/genealogy/business-simulate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(simulationRequest)
+      })
+
+      if (!response.ok) {
+        throw new Error(`Simulation failed: ${response.statusText}`)
+      }
+
+      const result = await response.json()
       
       setSimulationResult(result)
       
@@ -411,8 +433,8 @@ export default function SimulationConfigStep({
                 <div>
                   <p className="font-medium text-green-800">Simulation Complete!</p>
                   <p className="text-sm text-green-700 mt-1">
-                    Generated {simulationResult.simulation_summary.total_users_generated} users with{' '}
-                    {simulationResult.simulation_summary.total_personal_volume.toLocaleString()} total personal volume
+                    Generated {simulationResult.simulation_summary?.total_users_generated || simulationResult.users?.length || 0} users with{' '}
+                    ${(simulationResult.simulation_summary?.total_personal_volume || 0).toLocaleString()} total personal volume
                   </p>
                 </div>
               </div>
@@ -466,7 +488,7 @@ export default function SimulationConfigStep({
               <div className="text-center p-3 bg-blue-50 rounded-lg">
                 <Users className="w-8 h-8 text-blue-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-blue-800">
-                  {simulationResult.simulation_summary.total_users_generated}
+                  {simulationResult.simulation_summary?.total_users_generated || simulationResult.users?.length || 0}
                 </p>
                 <p className="text-sm text-blue-600">Total Users</p>
               </div>
@@ -474,7 +496,7 @@ export default function SimulationConfigStep({
               <div className="text-center p-3 bg-green-50 rounded-lg">
                 <TrendingUp className="w-8 h-8 text-green-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-green-800">
-                  ${simulationResult.simulation_summary.total_personal_volume.toLocaleString()}
+                  ${(simulationResult.simulation_summary?.total_personal_volume || 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-green-600">Personal Volume</p>
               </div>
@@ -482,7 +504,7 @@ export default function SimulationConfigStep({
               <div className="text-center p-3 bg-purple-50 rounded-lg">
                 <GitBranch className="w-8 h-8 text-purple-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-purple-800">
-                  ${simulationResult.simulation_summary.total_team_volume.toLocaleString()}
+                  ${(simulationResult.simulation_summary?.total_team_volume || 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-purple-600">Team Volume</p>
               </div>
@@ -494,7 +516,7 @@ export default function SimulationConfigStep({
             <div>
               <h4 className="font-medium text-gray-900 mb-3">Product Distribution</h4>
               <div className="space-y-2">
-                {Object.entries(simulationResult.simulation_summary.product_distribution).map(([productName, data]) => (
+                {simulationResult.simulation_summary?.product_distribution && Object.entries(simulationResult.simulation_summary.product_distribution).map(([productName, data]: [string, any]) => (
                   <div key={productName} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                     <span className="text-sm font-medium">{productName}</span>
                     <div className="flex items-center gap-2">
@@ -512,7 +534,7 @@ export default function SimulationConfigStep({
             <div>
               <h4 className="font-medium text-gray-900 mb-3">Users Generated Per Cycle</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(simulationResult.simulation_summary.users_per_cycle).map(([cycle, count]) => (
+                {simulationResult.simulation_summary?.users_per_cycle && Object.entries(simulationResult.simulation_summary.users_per_cycle).map(([cycle, count]: [string, any]) => (
                   <div key={cycle} className="text-center p-2 bg-gray-50 rounded">
                     <p className="text-lg font-bold text-gray-800">{count}</p>
                     <p className="text-xs text-gray-600">Cycle {cycle}</p>
