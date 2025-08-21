@@ -69,9 +69,9 @@ export async function createBusinessPlan(data: BusinessPlanCreate): Promise<Busi
     
     // Create business plan
     const planQuery = `
-      INSERT INTO business_plan_simulations (user_id, business_name, genealogy_simulation_id, created_by, commission_config)
+      INSERT INTO business_plan_simulations (user_id, name, genealogy_simulation_id, created_by, commission_config)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, user_id, business_name, status, created_at, updated_at
+      RETURNING id, user_id, name, status, created_at, updated_at
     `
     
     const planResult = await client.query(planQuery, [
@@ -151,6 +151,7 @@ export async function getBusinessPlanById(id: number): Promise<BusinessPlanSimul
   
   return {
     ...businessPlan,
+    business_name: businessPlan.name, // Map database field to interface field
     products: productsResult.rows,
     commission_config: businessPlan.commission_config ? JSON.parse(businessPlan.commission_config) : null,
     user: {
@@ -175,6 +176,7 @@ export async function getBusinessPlansByUserId(userId: number): Promise<Business
   
   const businessPlans = result.rows.map(row => ({
     ...row,
+    business_name: row.name, // Map database field to interface field
     commission_config: row.commission_config ? JSON.parse(row.commission_config) : null,
     user: {
       id: row.user_id,
@@ -212,6 +214,7 @@ export async function getAllBusinessPlans(): Promise<BusinessPlanSimulation[]> {
   
   const businessPlans = result.rows.map(row => ({
     ...row,
+    business_name: row.name, // Map database field to interface field
     commission_config: row.commission_config ? JSON.parse(row.commission_config) : null,
     user: {
       id: row.user_id,
@@ -249,7 +252,7 @@ export async function updateBusinessPlan(id: number, data: BusinessPlanUpdate): 
     let paramCount = 1
     
     if (data.business_name !== undefined) {
-      updateFields.push(`business_name = $${paramCount}`)
+      updateFields.push(`name = $${paramCount}`)
       updateValues.push(data.business_name)
       paramCount++
     }

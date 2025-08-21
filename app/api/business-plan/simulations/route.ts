@@ -89,12 +89,14 @@ export async function POST(request: NextRequest) {
 
     // Create the business plan
     const businessPlan = await createBusinessPlan({
-      ...data,
+      user_id: data.user_id,
       business_name: data.business_name.trim(),
       products: data.products.map(product => ({
         ...product,
         product_name: product.product_name.trim()
-      }))
+      })),
+      genealogy_simulation_id: data.genealogy_simulation_id,
+      commission_config: data.commission_config
     })
 
     return NextResponse.json({
