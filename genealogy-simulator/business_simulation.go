@@ -484,7 +484,7 @@ func calculateLegVolume(userID string, users []SimulationUser, genealogyType str
 // calculateLegVolumeSummary calculates summary statistics for all legs
 func calculateLegVolumeSummary(users []SimulationUser) map[string]LegVolumeData {
 	legSummary := make(map[string]LegVolumeData)
-	
+
 	// Initialize leg data structures
 	legs := []string{"left", "right", "leg-1", "leg-2", "leg-3", "leg-4", "leg-5"}
 	for _, leg := range legs {
@@ -496,27 +496,27 @@ func calculateLegVolumeSummary(users []SimulationUser) map[string]LegVolumeData 
 			MinVolume:     0.0,
 		}
 	}
-	
+
 	// Collect data for each leg
 	for _, user := range users {
 		for legName, legVolume := range user.TeamLegVolumes {
 			if legData, exists := legSummary[legName]; exists {
 				legData.TotalVolume += legVolume
 				legData.UserCount++
-				
+
 				if legVolume > legData.MaxVolume {
 					legData.MaxVolume = legVolume
 				}
-				
+
 				if legData.MinVolume == 0 || legVolume < legData.MinVolume {
 					legData.MinVolume = legVolume
 				}
-				
+
 				legSummary[legName] = legData
 			}
 		}
 	}
-	
+
 	// Calculate averages
 	for legName, legData := range legSummary {
 		if legData.UserCount > 0 {
@@ -524,7 +524,7 @@ func calculateLegVolumeSummary(users []SimulationUser) map[string]LegVolumeData 
 			legSummary[legName] = legData
 		}
 	}
-	
+
 	return legSummary
 }
 
