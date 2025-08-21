@@ -11,7 +11,7 @@ import BusinessProductStep from './business-product-step'
 import SimulationConfigStep from './simulation-config-step'
 import CommissionStep, { CommissionConfig } from './commission-step'
 import ReviewStep from './review-step'
-import { BusinessProduct, BusinessPlanCreate } from '@/lib/business-plan'
+import { BusinessProduct, BusinessPlanCreate, SimulationConfig } from '@/lib/business-plan'
 
 interface User {
   id: number
@@ -20,13 +20,7 @@ interface User {
   role: string
 }
 
-interface SimulationConfig {
-  genealogy_type_id: number
-  max_expected_users: number
-  payout_cycle_type: string
-  number_of_cycles: number
-  max_children_count: number
-}
+
 
 export default function BusinessPlanWizard() {
   const { user } = useAuth()
@@ -34,7 +28,13 @@ export default function BusinessPlanWizard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [businessName, setBusinessName] = useState('')
   const [products, setProducts] = useState<BusinessProduct[]>([])
-  const [simulationConfig, setSimulationConfig] = useState<SimulationConfig | null>(null)
+  const [simulationConfig, setSimulationConfig] = useState<SimulationConfig | null>({
+    genealogy_type: 'binary',
+    max_expected_users: 100,
+    payout_cycle: 'weekly',
+    number_of_payout_cycles: 2,
+    max_children_count: 2
+  })
   const [commissionConfig, setCommissionConfig] = useState<CommissionConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +88,14 @@ export default function BusinessPlanWizard() {
 
   const handleCommissionConfig = (config: CommissionConfig) => {
     setCommissionConfig(config)
+  }
+
+  const handleSimulationComplete = (simulationResult: any) => {
+    // Store the simulation result for use in business plan creation
+    setSimulationConfig(prev => ({
+      ...prev!,
+      simulation_result: simulationResult
+    }))
   }
 
   const handleCreateBusinessPlan = async () => {
@@ -177,13 +185,15 @@ export default function BusinessPlanWizard() {
             onConfigChange={handleBusinessConfig}
           />
         )
-      case 3:
-        return (
-          <SimulationConfigStep
-            config={simulationConfig}
-            onConfigChange={handleSimulationConfig}
-          />
-        )
+              case 3:
+          return (
+            <SimulationConfigStep
+              config={simulationConfig}
+              products={products}
+              onConfigChange={handleSimulationConfig}
+              onSimulationComplete={handleSimulationComplete}
+            />
+          )
       case 4:
         return (
           <CommissionStep

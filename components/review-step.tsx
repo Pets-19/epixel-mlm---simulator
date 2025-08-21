@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { User, Building2, Package, Settings, CreditCard, Monitor, DollarSign } from 'lucide-react'
-import { BusinessProduct } from '@/lib/business-plan'
+import { BusinessProduct, SimulationConfig } from '@/lib/business-plan'
 import { CommissionConfig } from './commission-step'
 
 interface User {
@@ -12,14 +12,6 @@ interface User {
   name: string
   email: string
   role: string
-}
-
-interface SimulationConfig {
-  genealogy_type_id: number
-  max_expected_users: number
-  payout_cycle_type: string
-  number_of_cycles: number
-  max_children_count: number
 }
 
 interface ReviewStepProps {
@@ -193,7 +185,7 @@ export default function ReviewStep({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-gray-500">Genealogy Type</p>
-              <p className="font-medium">Type #{simulationConfig.genealogy_type_id}</p>
+              <p className="font-medium capitalize">{simulationConfig.genealogy_type}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Maximum Expected Users</p>
@@ -201,11 +193,11 @@ export default function ReviewStep({
             </div>
             <div>
               <p className="text-sm text-gray-500">Payout Cycle</p>
-              <p className="font-medium capitalize">{simulationConfig.payout_cycle_type}</p>
+              <p className="font-medium capitalize">{simulationConfig.payout_cycle}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">Number of Cycles</p>
-              <p className="font-medium">{simulationConfig.number_of_cycles}</p>
+              <p className="text-sm text-gray-500">Number of Payout Cycles</p>
+              <p className="font-medium">{simulationConfig.number_of_payout_cycles}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Max Children Count</p>
@@ -214,7 +206,7 @@ export default function ReviewStep({
             <div>
               <p className="text-sm text-gray-500">Users per Cycle</p>
               <p className="font-medium">
-                {Math.ceil(simulationConfig.max_expected_users / simulationConfig.number_of_cycles)}
+                {Math.ceil(simulationConfig.max_expected_users / simulationConfig.number_of_payout_cycles)}
               </p>
             </div>
           </div>

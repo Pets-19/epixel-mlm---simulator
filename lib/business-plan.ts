@@ -48,6 +48,15 @@ export interface BusinessPlanUpdate {
   commission_config?: any
 }
 
+export interface SimulationConfig {
+  genealogy_type: string
+  max_expected_users: number
+  payout_cycle: string
+  number_of_payout_cycles: number
+  max_children_count: number
+  simulation_result?: any
+}
+
 export interface BusinessPlanTemplate {
   id?: number
   name: string

@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,39 +6,39 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Play, Settings } from 'lucide-react'
-
-interface GenealogyType {
-  id: number
-  name: string
-  description: string
-  max_children_per_node: number
-}
-
-interface SimulationConfig {
-  genealogy_type_id: number
-  max_expected_users: number
-  payout_cycle_type: string
-  number_of_cycles: number
-  max_children_count: number
-}
+import { Separator } from '@/components/ui/separator'
+import { Loader2, Play, CheckCircle, AlertCircle, Users, TrendingUp, Calendar, GitBranch, Package, Settings } from 'lucide-react'
+import { SimulationConfig, BusinessProduct } from '@/lib/business-plan'
+import { SimulationEngine, SimulationResult, SimulationConfigExtended } from '@/lib/simulation-engine'
 
 interface SimulationConfigStepProps {
   config: SimulationConfig | null
+  products: BusinessProduct[]
   onConfigChange: (config: SimulationConfig) => void
+  onSimulationComplete?: (simulationResult: SimulationResult) => void
 }
 
-export default function SimulationConfigStep({ config, onConfigChange }: SimulationConfigStepProps) {
-  const [genealogyTypes, setGenealogyTypes] = useState<GenealogyType[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export default function SimulationConfigStep({ 
+  config, 
+  products, 
+  onConfigChange,
+  onSimulationComplete 
+}: SimulationConfigStepProps) {
   const [localConfig, setLocalConfig] = useState<SimulationConfig>({
-    genealogy_type_id: 0,
-    max_expected_users: 0,
-    payout_cycle_type: 'weekly',
-    number_of_cycles: 0,
+    genealogy_type: 'binary',
+    max_expected_users: 100,
+    payout_cycle: 'weekly',
+    number_of_payout_cycles: 2,
     max_children_count: 2
   })
+
+  const [genealogyTypes, setGenealogyTypes] = useState<Array<{ id: number; name: string; description: string }>>([])
+  const [loading, setLoading] = useState(false)
+  const [simulating, setSimulating] = useState(false)
+  const [simulationProgress, setSimulationProgress] = useState<{ current: number; total: number; percentage: number } | null>(null)
+  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   useEffect(() => {
     if (config) {
@@ -49,262 +48,480 @@ export default function SimulationConfigStep({ config, onConfigChange }: Simulat
   }, [config])
 
   useEffect(() => {
-    if (localConfig.genealogy_type_id > 0) {
-      onConfigChange(localConfig)
+    // Update max_children_count based on genealogy type
+    if (localConfig.genealogy_type === 'binary') {
+      setLocalConfig(prev => ({ ...prev, max_children_count: 2 }))
+    } else if (localConfig.genealogy_type === 'unilevel') {
+      setLocalConfig(prev => ({ ...prev, max_children_count: Math.max(prev.max_children_count, 1) }))
     }
-  }, [localConfig, onConfigChange])
+  }, [localConfig.genealogy_type])
 
   const fetchGenealogyTypes = async () => {
-    setLoading(true)
-    setError(null)
-    
     try {
       const response = await fetch('/api/genealogy-types')
       if (response.ok) {
         const data = await response.json()
         setGenealogyTypes(data)
-        if (data.length > 0 && !localConfig.genealogy_type_id) {
-          setLocalConfig(prev => ({
-            ...prev,
-            genealogy_type_id: data[0].id
-          }))
-        }
-      } else {
-        setError('Failed to fetch genealogy types')
       }
-    } catch (err) {
-      setError('An error occurred while fetching genealogy types')
+    } catch (error) {
+      console.error('Error fetching genealogy types:', error)
+    }
+  }
+
+  const validateConfig = (): boolean => {
+    const errors: string[] = []
+
+    if (localConfig.max_expected_users < 1) {
+      errors.push('Maximum expected users must be at least 1')
+    }
+
+    if (localConfig.number_of_payout_cycles < 1) {
+      errors.push('Number of payout cycles must be at least 1')
+    }
+
+    if (localConfig.max_children_count < 1) {
+      errors.push('Maximum children count must be at least 1')
+    }
+
+    // Validate genealogy type constraints
+    if (localConfig.genealogy_type === 'binary' && localConfig.max_children_count !== 2) {
+      errors.push('Binary genealogy type requires exactly 2 children per user')
+    }
+
+    if (localConfig.genealogy_type === 'unilevel' && localConfig.max_children_count < 1) {
+      errors.push('Unilevel genealogy type requires at least 1 child per user')
+    }
+
+    if (localConfig.genealogy_type === 'matrix' && localConfig.max_children_count < 1) {
+      errors.push('Matrix genealogy type requires at least 1 child per user')
+    }
+
+    // Validate products
+    if (!products || products.length === 0) {
+      errors.push('At least one product is required for simulation')
+    } else {
+      // Validate sales ratios total 100%
+      const totalSalesRatio = products.reduce((sum, product) => sum + product.product_sales_ratio, 0)
+      if (Math.abs(totalSalesRatio - 100) > 0.01) {
+        errors.push(`Product sales ratios must total 100%. Current total: ${totalSalesRatio.toFixed(1)}%`)
+      }
+    }
+
+    setValidationErrors(errors)
+    return errors.length === 0
+  }
+
+  const handleConfigChange = (field: keyof SimulationConfig, value: any) => {
+    const newConfig = { ...localConfig, [field]: value }
+    setLocalConfig(newConfig)
+    onConfigChange(newConfig)
+    setError(null)
+    setValidationErrors([])
+  }
+
+  const runSimulation = async () => {
+    if (!validateConfig()) {
+      return
+    }
+
+    setSimulating(true)
+    setError(null)
+    setSimulationProgress({ current: 0, total: localConfig.max_expected_users, percentage: 0 })
+
+    try {
+      // Create extended config with products
+      const extendedConfig: SimulationConfigExtended = {
+        ...localConfig,
+        products
+      }
+
+      // Create and run simulation engine
+      const simulationEngine = new SimulationEngine(extendedConfig)
+      
+      // Run simulation
+      const result = await simulationEngine.runSimulation()
+      
+      setSimulationResult(result)
+      
+      // Notify parent component
+      if (onSimulationComplete) {
+        onSimulationComplete(result)
+      }
+      
+      setError(null)
+    } catch (error) {
+      console.error('Simulation error:', error)
+      setError(error instanceof Error ? error.message : 'Simulation failed')
     } finally {
-      setLoading(false)
+      setSimulating(false)
+      setSimulationProgress(null)
     }
   }
 
-  const updateConfig = (field: keyof SimulationConfig, value: any) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const getSelectedGenealogyType = () => {
-    return genealogyTypes.find(type => type.id === localConfig.genealogy_type_id)
-  }
-
-  const validateConfig = () => {
-    return localConfig.genealogy_type_id > 0 &&
-           localConfig.max_expected_users > 0 &&
-           localConfig.number_of_cycles > 0 &&
-           localConfig.max_children_count > 0
-  }
-
-  const getMaxChildrenDescription = () => {
-    const selectedType = getSelectedGenealogyType()
-    if (!selectedType) return ''
-
-    switch (selectedType.name) {
-      case 'Binary Plan':
-        return 'Binary Plan always uses 2 children per parent'
-      case 'Matrix Plan':
-        return 'Maximum number of children any parent node can have'
-      case 'Unilevel Plan':
-        return 'Average number of children per parent for filling/spilling logic'
+  const getGenealogyTypeDescription = (type: string) => {
+    switch (type) {
+      case 'binary':
+        return 'Two children per user, left/right leg structure'
+      case 'unilevel':
+        return 'Unlimited children per user, single level structure'
+      case 'matrix':
+        return 'Fixed matrix structure with level-based filling'
       default:
-        return 'Select a genealogy type to see specific requirements'
+        return 'Custom genealogy structure'
     }
   }
 
-  const isMaxChildrenRequired = () => {
-    const selectedType = getSelectedGenealogyType()
-    return selectedType && (selectedType.name === 'Unilevel Plan' || selectedType.name === 'Matrix Plan')
-  }
-
-  const isMaxChildrenDisabled = () => {
-    const selectedType = getSelectedGenealogyType()
-    return selectedType?.name === 'Binary Plan'
+  const getPayoutCycleDescription = (cycle: string) => {
+    switch (cycle) {
+      case 'weekly':
+        return 'Weekly commission payouts'
+      case 'biweekly':
+        return 'Bi-weekly commission payouts'
+      case 'monthly':
+        return 'Monthly commission payouts'
+      case 'quarterly':
+        return 'Quarterly commission payouts'
+      default:
+        return 'Custom payout cycle'
+    }
   }
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-gray-900">Simulation Setup</h2>
+        <p className="text-gray-600 mt-2">
+          Configure genealogy simulation parameters and run the simulation
+        </p>
+      </div>
 
-      {/* Genealogy Type Selection */}
-      <div>
-        <Label htmlFor="genealogy-type" className="text-base font-medium">
-          Genealogy Type *
-        </Label>
-        <Select
-          value={localConfig.genealogy_type_id > 0 ? localConfig.genealogy_type_id.toString() : undefined}
-          onValueChange={(value) => {
-            const typeId = parseInt(value)
-            const selectedType = genealogyTypes.find(type => type.id === typeId)
-            updateConfig('genealogy_type_id', typeId)
-            if (selectedType?.name === 'Binary Plan') {
-              updateConfig('max_children_count', 2)
-            }
-          }}
-        >
-          <SelectTrigger className="mt-2">
-            <SelectValue placeholder="Select genealogy type" />
-          </SelectTrigger>
-          <SelectContent>
-            {loading ? (
-              <SelectItem value="loading" disabled>Loading...</SelectItem>
-            ) : (
-              genealogyTypes.map((type) => (
-                <SelectItem key={type.id} value={type.id.toString()}>
-                  {type.name}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
-        
-        {getSelectedGenealogyType() && (
-          <div className="mt-2 p-3 bg-gray-50 rounded-md">
-            <p className="text-sm text-gray-600">
-              {getSelectedGenealogyType()?.description}
+      {/* Configuration Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Settings className="w-5 h-5 mr-2" />
+            Simulation Configuration
+          </CardTitle>
+          <CardDescription>
+            Set up the genealogy structure and simulation parameters
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Genealogy Type */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <Label htmlFor="genealogy-type">Genealogy Type *</Label>
+              <Select
+                value={localConfig.genealogy_type}
+                onValueChange={(value) => handleConfigChange('genealogy_type', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select genealogy type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {genealogyTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.name.toLowerCase()}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-gray-500 mt-1">
+                {getGenealogyTypeDescription(localConfig.genealogy_type)}
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="max-children">Maximum Children Count *</Label>
+              <Input
+                id="max-children"
+                type="number"
+                min={1}
+                max={localConfig.genealogy_type === 'binary' ? 2 : 10}
+                value={localConfig.max_children_count}
+                onChange={(e) => handleConfigChange('max_children_count', parseInt(e.target.value))}
+                disabled={localConfig.genealogy_type === 'binary'}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                {localConfig.genealogy_type === 'binary' 
+                  ? 'Binary type is fixed at 2 children' 
+                  : 'Maximum children per user in genealogy'
+                }
+              </p>
+            </div>
+          </div>
+
+          {/* User Configuration */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <Label htmlFor="max-users">Maximum Expected Users *</Label>
+              <Input
+                id="max-users"
+                type="number"
+                min={1}
+                max={10000}
+                value={localConfig.max_expected_users}
+                onChange={(e) => handleConfigChange('max_expected_users', parseInt(e.target.value))}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Total users to generate in the simulation
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="payout-cycles">Number of Payout Cycles *</Label>
+              <Input
+                id="payout-cycles"
+                type="number"
+                min={1}
+                max={52}
+                value={localConfig.number_of_payout_cycles}
+                onChange={(e) => handleConfigChange('number_of_payout_cycles', parseInt(e.target.value))}
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Users will be generated gradually per cycle
+              </p>
+            </div>
+          </div>
+
+          {/* Payout Cycle */}
+          <div>
+            <Label htmlFor="payout-cycle">Payout Cycle *</Label>
+            <Select
+              value={localConfig.payout_cycle}
+              onValueChange={(value) => handleConfigChange('payout_cycle', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select payout cycle" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="quarterly">Quarterly</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-gray-500 mt-1">
+              {getPayoutCycleDescription(localConfig.payout_cycle)}
             </p>
           </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Simulation Parameters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="max-users" className="text-base font-medium">
-            Maximum Expected Users *
-          </Label>
-          <Input
-            id="max-users"
-            type="number"
-            min="1"
-            max="10000"
-            value={localConfig.max_expected_users || ''}
-            onChange={(e) => updateConfig('max_expected_users', parseInt(e.target.value) || 0)}
-            placeholder="Enter number of users"
-            className="mt-2"
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            Total number of users to simulate
-          </p>
-        </div>
-
-        <div>
-          <Label htmlFor="payout-cycle" className="text-base font-medium">
-            Payout Cycle
-          </Label>
-          <Select
-            value={localConfig.payout_cycle_type}
-            onValueChange={(value) => updateConfig('payout_cycle_type', value)}
-          >
-            <SelectTrigger className="mt-2">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="biweekly">Biweekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-sm text-gray-500 mt-1">
-            Frequency of payout cycles
-          </p>
-        </div>
-
-        <div>
-          <Label htmlFor="cycles" className="text-base font-medium">
-            Number of Payout Cycles *
-          </Label>
-          <Input
-            id="cycles"
-            type="number"
-            min="1"
-            max="52"
-            value={localConfig.number_of_cycles || ''}
-            onChange={(e) => updateConfig('number_of_cycles', parseInt(e.target.value) || 0)}
-            placeholder="Enter number of cycles"
-            className="mt-2"
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            Total number of payout cycles to simulate
-          </p>
-        </div>
-
-        <div>
-          <Label htmlFor="max-children" className="text-base font-medium">
-            Max Children Count {isMaxChildrenRequired() ? '*' : ''}
-          </Label>
-          <Input
-            id="max-children"
-            type="number"
-            min="1"
-            max="20"
-            value={localConfig.max_children_count || ''}
-            onChange={(e) => updateConfig('max_children_count', parseInt(e.target.value) || 0)}
-            placeholder="Enter max children per parent"
-            className="mt-2"
-            disabled={isMaxChildrenDisabled()}
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            {getMaxChildrenDescription()}
-          </p>
-        </div>
-      </div>
-
-      {/* Configuration Summary */}
-      {validateConfig() && (
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2 mb-3">
-              <Settings className="w-5 h-5 text-green-600" />
-              <h3 className="font-medium text-green-800">Configuration Summary</h3>
+      {/* Product Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Package className="w-5 h-5 mr-2" />
+            Product Configuration
+          </CardTitle>
+          <CardDescription>
+            Products and their sales ratios for simulation
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {products.map((product, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium">{product.product_name}</p>
+                  <p className="text-sm text-gray-600">
+                    Commissionable Volume: ${product.business_volume}
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {product.product_sales_ratio}% Sales Ratio
+                </Badge>
+              </div>
+            ))}
+            
+            {/* Sales Ratio Validation */}
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-blue-800">Total Sales Ratio:</span>
+                <Badge variant={products.reduce((sum, p) => sum + p.product_sales_ratio, 0) === 100 ? 'default' : 'destructive'}>
+                  {products.reduce((sum, p) => sum + p.product_sales_ratio, 0)}%
+                </Badge>
+              </div>
+              {products.reduce((sum, p) => sum + p.product_sales_ratio, 0) !== 100 && (
+                <p className="text-xs text-blue-600 mt-1">
+                  Sales ratios must total exactly 100% for simulation
+                </p>
+              )}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-green-600">Genealogy Type</p>
-                <p className="font-medium text-green-800">
-                  {getSelectedGenealogyType()?.name}
-                </p>
-              </div>
-              <div>
-                <p className="text-green-600">Max Users</p>
-                <p className="font-medium text-green-800">
-                  {localConfig.max_expected_users.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-green-600">Payout Cycle</p>
-                <p className="font-medium text-green-800 capitalize">
-                  {localConfig.payout_cycle_type}
-                </p>
-              </div>
-              <div>
-                <p className="text-green-600">Cycles</p>
-                <p className="font-medium text-green-800">
-                  {localConfig.number_of_cycles}
-                </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Simulation Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Play className="w-5 h-5 mr-2" />
+            Run Simulation
+          </CardTitle>
+          <CardDescription>
+            Generate genealogy structure and simulate user behavior
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Validation Errors */}
+          {validationErrors.length > 0 && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                <div>
+                  <p className="font-medium text-red-800">Configuration Errors:</p>
+                  <ul className="text-sm text-red-700 mt-1 list-disc list-inside">
+                    {validationErrors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-green-200">
-              <p className="text-sm text-green-600">
-                Users per cycle: {Math.ceil(localConfig.max_expected_users / localConfig.number_of_cycles)}
+          )}
+
+          {/* Simulation Progress */}
+          {simulationProgress && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-800">Simulation Progress</span>
+                <span className="text-sm text-blue-600">
+                  {simulationProgress.current} / {simulationProgress.total} users
+                </span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${simulationProgress.percentage}%` }}
+                />
+              </div>
+              <p className="text-xs text-blue-600 mt-1">
+                {simulationProgress.percentage.toFixed(1)}% Complete
               </p>
+            </div>
+          )}
+
+          {/* Simulation Results */}
+          {simulationResult && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center">
+                <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
+                <div>
+                  <p className="font-medium text-green-800">Simulation Complete!</p>
+                  <p className="text-sm text-green-700 mt-1">
+                    Generated {simulationResult.simulation_summary.total_users_generated} users with{' '}
+                    {simulationResult.simulation_summary.total_personal_volume.toLocaleString()} total personal volume
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                <span className="text-red-800">{error}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <Button
+              onClick={runSimulation}
+              disabled={simulating || validationErrors.length > 0}
+              className="flex-1"
+            >
+              {simulating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Running Simulation...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Run Simulation
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Simulation Summary */}
+      {simulationResult && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <TrendingUp className="w-5 h-5 mr-2" />
+              Simulation Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-3 bg-blue-50 rounded-lg">
+                <Users className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-blue-800">
+                  {simulationResult.simulation_summary.total_users_generated}
+                </p>
+                <p className="text-sm text-blue-600">Total Users</p>
+              </div>
+              
+              <div className="text-center p-3 bg-green-50 rounded-lg">
+                <TrendingUp className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-green-800">
+                  ${simulationResult.simulation_summary.total_personal_volume.toLocaleString()}
+                </p>
+                <p className="text-sm text-green-600">Personal Volume</p>
+              </div>
+              
+              <div className="text-center p-3 bg-purple-50 rounded-lg">
+                <GitBranch className="w-8 h-8 text-purple-500 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-purple-800">
+                  ${simulationResult.simulation_summary.total_team_volume.toLocaleString()}
+                </p>
+                <p className="text-sm text-purple-600">Team Volume</p>
+              </div>
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* Product Distribution */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">Product Distribution</h4>
+              <div className="space-y-2">
+                {Object.entries(simulationResult.simulation_summary.product_distribution).map(([productName, data]) => (
+                  <div key={productName} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    <span className="text-sm font-medium">{productName}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">{data.count} users</span>
+                      <Badge variant="outline">{data.percentage.toFixed(1)}%</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* Users Per Cycle */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">Users Generated Per Cycle</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.entries(simulationResult.simulation_summary.users_per_cycle).map(([cycle, count]) => (
+                  <div key={cycle} className="text-center p-2 bg-gray-50 rounded">
+                    <p className="text-lg font-bold text-gray-800">{count}</p>
+                    <p className="text-xs text-gray-600">Cycle {cycle}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Validation Status */}
-      {!validateConfig() && (
-        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-          <p className="text-sm text-yellow-800">
-            Please complete all required fields to proceed.
-          </p>
-        </div>
       )}
     </div>
   )
