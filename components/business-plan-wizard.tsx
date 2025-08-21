@@ -9,6 +9,7 @@ import { CheckCircle, Circle, ArrowLeft, ArrowRight } from 'lucide-react'
 import UserSelectionStep from './user-selection-step'
 import BusinessProductStep from './business-product-step'
 import SimulationConfigStep from './simulation-config-step'
+import CommissionStep, { CommissionConfig } from './commission-step'
 import ReviewStep from './review-step'
 import { BusinessProduct, BusinessPlanCreate } from '@/lib/business-plan'
 
@@ -34,6 +35,7 @@ export default function BusinessPlanWizard() {
   const [businessName, setBusinessName] = useState('')
   const [products, setProducts] = useState<BusinessProduct[]>([])
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig | null>(null)
+  const [commissionConfig, setCommissionConfig] = useState<CommissionConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -53,11 +55,12 @@ export default function BusinessPlanWizard() {
     { id: 1, title: 'User Account', description: 'Select or create business user' },
     { id: 2, title: 'Business & Products', description: 'Configure business and products' },
     { id: 3, title: 'Simulation Setup', description: 'Configure genealogy simulation' },
-    { id: 4, title: 'Review & Create', description: 'Review and create business plan' }
+    { id: 4, title: 'Create Business Plan', description: 'Configure commission structure' },
+    { id: 5, title: 'Review & Create', description: 'Review and create business plan' }
   ]
 
   const handleNext = () => {
-    if (currentStep < 4) {
+    if (currentStep < 5) {
       setCurrentStep(currentStep + 1)
       setError(null)
     }
@@ -83,8 +86,12 @@ export default function BusinessPlanWizard() {
     setSimulationConfig(config)
   }
 
+  const handleCommissionConfig = (config: CommissionConfig) => {
+    setCommissionConfig(config)
+  }
+
   const handleCreateBusinessPlan = async () => {
-    if (!selectedUser || !businessName || products.length === 0 || !simulationConfig) {
+    if (!selectedUser || !businessName || products.length === 0 || !simulationConfig || !commissionConfig) {
       setError('Please complete all steps before creating the business plan')
       return
     }
@@ -99,7 +106,8 @@ export default function BusinessPlanWizard() {
         user_id: selectedUser.id,
         business_name: businessName,
         products: products,
-        genealogy_simulation_id: undefined // Will be set after simulation is created
+        genealogy_simulation_id: undefined, // Will be set after simulation is created
+        commission_config: commissionConfig
       }
 
       const response = await fetch('/api/business-plan/simulations', {
@@ -120,6 +128,7 @@ export default function BusinessPlanWizard() {
         setBusinessName('')
         setProducts([])
         setSimulationConfig(null)
+        setCommissionConfig(null)
         setCurrentStep(1)
       } else {
         setError(data.error || 'Failed to create business plan')
@@ -143,6 +152,8 @@ export default function BusinessPlanWizard() {
       case 3:
         return simulationConfig !== null
       case 4:
+        return commissionConfig !== null
+      case 5:
         return true
       default:
         return false
@@ -175,11 +186,19 @@ export default function BusinessPlanWizard() {
         )
       case 4:
         return (
+          <CommissionStep
+            config={commissionConfig}
+            onConfigChange={handleCommissionConfig}
+          />
+        )
+      case 5:
+        return (
           <ReviewStep
             selectedUser={selectedUser}
             businessName={businessName}
             products={products}
             simulationConfig={simulationConfig}
+            commissionConfig={commissionConfig}
           />
         )
       default:

@@ -3,8 +3,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { User, Building2, Package, Settings, CreditCard, Monitor } from 'lucide-react'
+import { User, Building2, Package, Settings, CreditCard, Monitor, DollarSign } from 'lucide-react'
 import { BusinessProduct } from '@/lib/business-plan'
+import { CommissionConfig } from './commission-step'
 
 interface User {
   id: number
@@ -26,13 +27,15 @@ interface ReviewStepProps {
   businessName: string
   products: BusinessProduct[]
   simulationConfig: SimulationConfig | null
+  commissionConfig: CommissionConfig | null
 }
 
 export default function ReviewStep({ 
   selectedUser, 
   businessName, 
   products, 
-  simulationConfig 
+  simulationConfig,
+  commissionConfig
 }: ReviewStepProps) {
   const getProductTypeIcon = (type: string) => {
     switch (type) {
@@ -68,7 +71,7 @@ export default function ReviewStep({
     return products.reduce((sum, product) => sum + (product.business_volume || 0), 0)
   }
 
-  if (!selectedUser || !businessName || products.length === 0 || !simulationConfig) {
+  if (!selectedUser || !businessName || products.length === 0 || !simulationConfig || !commissionConfig) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-500">Please complete all previous steps to review your business plan.</p>
@@ -218,6 +221,92 @@ export default function ReviewStep({
         </CardContent>
       </Card>
 
+      {/* Commission Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <DollarSign className="w-5 h-5 mr-2" />
+            Commission Structure
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Standard Commissions */}
+            <div>
+              <h4 className="font-medium text-gray-900 mb-3">Standard Commissions</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {commissionConfig.standard_commissions
+                  .filter(comm => comm.is_enabled)
+                  .map((commission) => (
+                    <div key={commission.id} className="p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900">{commission.name}</span>
+                        <Badge variant="outline">{commission.percentage}%</Badge>
+                      </div>
+                      <p className="text-sm text-gray-600">{commission.description}</p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                        {commission.max_level && <span>Max Level: {commission.max_level}</span>}
+                        {commission.min_volume && <span>Min Vol: ${commission.min_volume}</span>}
+                        {commission.max_volume && <span>Max Vol: ${commission.max_volume}</span>}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            {/* Custom Commissions */}
+            {commissionConfig.custom_commissions.filter(comm => comm.is_enabled).length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3">Custom Commissions</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {commissionConfig.custom_commissions
+                    .filter(comm => comm.is_enabled)
+                    .map((commission) => (
+                      <div key={commission.id} className="p-3 bg-blue-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-blue-900">{commission.name}</span>
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                            {commission.percentage}%
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-blue-700">{commission.description}</p>
+                        <div className="flex items-center gap-4 mt-2 text-xs text-blue-600">
+                          <span>Trigger: {commission.trigger_type} ({commission.trigger_value})</span>
+                          {commission.max_level && <span>Max Level: {commission.max_level}</span>}
+                          {commission.max_volume && <span>Max Vol: ${commission.max_volume}</span>}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Commission Summary */}
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-green-800">Total Commission Rate</p>
+                  <p className="text-sm text-green-600">
+                    {commissionConfig.standard_commissions.filter(c => c.is_enabled).length} Standard + {commissionConfig.custom_commissions.filter(c => c.is_enabled).length} Custom
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-green-800">
+                    {(commissionConfig.standard_commissions
+                      .filter(c => c.is_enabled)
+                      .reduce((sum, c) => sum + c.percentage, 0) +
+                      commissionConfig.custom_commissions
+                        .filter(c => c.is_enabled)
+                        .reduce((sum, c) => sum + c.percentage, 0)
+                    ).toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Summary */}
       <Card className="bg-gradient-to-r from-blue-50 to-green-50 border-blue-200">
         <CardContent className="p-6">
@@ -228,7 +317,7 @@ export default function ReviewStep({
             <p className="text-gray-600 mb-4">
               Ready to create business plan simulation for {selectedUser.name}
             </p>
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="text-gray-500">Products</p>
                 <p className="font-bold text-gray-900">{products.length}</p>
@@ -240,6 +329,18 @@ export default function ReviewStep({
               <div>
                 <p className="text-gray-500">Simulation Users</p>
                 <p className="font-bold text-gray-900">{simulationConfig.max_expected_users.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Commission Rate</p>
+                <p className="font-bold text-gray-900">
+                  {(commissionConfig.standard_commissions
+                    .filter(c => c.is_enabled)
+                    .reduce((sum, c) => sum + c.percentage, 0) +
+                    commissionConfig.custom_commissions
+                      .filter(c => c.is_enabled)
+                      .reduce((sum, c) => sum + c.percentage, 0)
+                  ).toFixed(1)}%
+                </p>
               </div>
             </div>
           </div>

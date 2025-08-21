@@ -24,6 +24,7 @@ export interface BusinessPlanSimulation {
   created_at?: Date
   updated_at?: Date
   products?: BusinessProduct[]
+  commission_config?: any
   user?: {
     id: number
     name: string
@@ -37,12 +38,14 @@ export interface BusinessPlanCreate {
   business_name: string
   products: BusinessProduct[]
   genealogy_simulation_id?: string
+  commission_config?: any // Will be stored as JSON in database
 }
 
 export interface BusinessPlanUpdate {
   business_name?: string
   status?: 'draft' | 'active' | 'completed' | 'cancelled'
   products?: BusinessProduct[]
+  commission_config?: any
 }
 
 export interface BusinessPlanTemplate {
@@ -66,8 +69,8 @@ export async function createBusinessPlan(data: BusinessPlanCreate): Promise<Busi
     
     // Create business plan
     const planQuery = `
-      INSERT INTO business_plan_simulations (user_id, business_name, genealogy_simulation_id, created_by)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO business_plan_simulations (user_id, business_name, genealogy_simulation_id, created_by, commission_config)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING id, user_id, business_name, status, created_at, updated_at
     `
     
@@ -75,7 +78,8 @@ export async function createBusinessPlan(data: BusinessPlanCreate): Promise<Busi
       data.user_id,
       data.business_name,
       data.genealogy_simulation_id || null,
-      data.user_id // created_by defaults to user_id for now
+      data.user_id, // created_by defaults to user_id for now
+      data.commission_config ? JSON.stringify(data.commission_config) : null
     ])
     
     const businessPlan = planResult.rows[0]
@@ -148,6 +152,7 @@ export async function getBusinessPlanById(id: number): Promise<BusinessPlanSimul
   return {
     ...businessPlan,
     products: productsResult.rows,
+    commission_config: businessPlan.commission_config ? JSON.parse(businessPlan.commission_config) : null,
     user: {
       id: businessPlan.user_id,
       name: businessPlan.user_name,
@@ -170,6 +175,7 @@ export async function getBusinessPlansByUserId(userId: number): Promise<Business
   
   const businessPlans = result.rows.map(row => ({
     ...row,
+    commission_config: row.commission_config ? JSON.parse(row.commission_config) : null,
     user: {
       id: row.user_id,
       name: row.user_name,
@@ -206,6 +212,7 @@ export async function getAllBusinessPlans(): Promise<BusinessPlanSimulation[]> {
   
   const businessPlans = result.rows.map(row => ({
     ...row,
+    commission_config: row.commission_config ? JSON.parse(row.commission_config) : null,
     user: {
       id: row.user_id,
       name: row.user_name,
@@ -250,6 +257,12 @@ export async function updateBusinessPlan(id: number, data: BusinessPlanUpdate): 
     if (data.status !== undefined) {
       updateFields.push(`status = $${paramCount}`)
       updateValues.push(data.status)
+      paramCount++
+    }
+    
+    if (data.commission_config !== undefined) {
+      updateFields.push(`commission_config = $${paramCount}`)
+      updateValues.push(JSON.stringify(data.commission_config))
       paramCount++
     }
     

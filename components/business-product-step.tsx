@@ -217,7 +217,7 @@ export default function BusinessProductStep({
                       />
                     </div>
                                          <div>
-                       <Label htmlFor={`business-volume-${index}`}>Business Volume ($) *</Label>
+                       <Label htmlFor={`business-volume-${index}`}>Commissionable Volume ($) *</Label>
                        <Input
                          id={`business-volume-${index}`}
                          type="number"
