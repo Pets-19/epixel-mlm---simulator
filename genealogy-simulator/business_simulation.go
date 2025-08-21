@@ -23,21 +23,22 @@ type BusinessProduct struct {
 
 // SimulationUser represents a user in the simulation with product assignment
 type SimulationUser struct {
-	ID                   string         `json:"id"`
-	Name                 string         `json:"name"`
-	Email                string         `json:"email"`
-	Level                int            `json:"level"`
-	ParentID             *string        `json:"parent_id,omitempty"`
-	Children             []string       `json:"children"`
-	GenealogyPosition    string         `json:"genealogy_position"`
-	ProductID            *int           `json:"product_id,omitempty"`
-	ProductName          *string        `json:"product_name,omitempty"`
-	PersonalVolume       float64        `json:"personal_volume"`
-	TeamVolume           float64        `json:"team_volume"`
-	CommissionableVolume float64        `json:"commissionable_volume"`
-	PayoutCycle          int            `json:"payout_cycle"`
-	CreatedAt            time.Time      `json:"created_at"`
-	GenealogyNode        *GenealogyNode `json:"genealogy_node,omitempty"`
+	ID                   string             `json:"id"`
+	Name                 string             `json:"name"`
+	Email                string             `json:"email"`
+	Level                int                `json:"level"`
+	ParentID             *string            `json:"parent_id,omitempty"`
+	Children             []string           `json:"children"`
+	GenealogyPosition    string             `json:"genealogy_position"`
+	ProductID            *int               `json:"product_id,omitempty"`
+	ProductName          *string            `json:"product_name,omitempty"`
+	PersonalVolume       float64            `json:"personal_volume"`
+	TeamVolume           float64            `json:"team_volume"`
+	TeamLegVolumes       map[string]float64 `json:"team_leg_volumes"`
+	CommissionableVolume float64            `json:"commissionable_volume"`
+	PayoutCycle          int                `json:"payout_cycle"`
+	CreatedAt            time.Time          `json:"created_at"`
+	GenealogyNode        *GenealogyNode     `json:"genealogy_node,omitempty"`
 }
 
 // BusinessSimulationRequest represents the enhanced simulation request
@@ -74,6 +75,16 @@ type SimulationSummary struct {
 	TotalPersonalVolume float64                            `json:"total_personal_volume"`
 	TotalTeamVolume     float64                            `json:"total_team_volume"`
 	AverageTeamVolume   float64                            `json:"average_team_volume"`
+	LegVolumeSummary    map[string]LegVolumeData           `json:"leg_volume_summary"`
+}
+
+// LegVolumeData represents volume data for each leg
+type LegVolumeData struct {
+	TotalVolume   float64 `json:"total_volume"`
+	UserCount     int     `json:"user_count"`
+	AverageVolume float64 `json:"average_volume"`
+	MaxVolume     float64 `json:"max_volume"`
+	MinVolume     float64 `json:"min_volume"`
 }
 
 // ProductDistributionData represents product distribution statistics
@@ -253,6 +264,7 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 			PayoutCycle:       node.PayoutCycle,
 			CreatedAt:         node.CreatedAt,
 			GenealogyNode:     &node,
+			TeamLegVolumes:    make(map[string]float64),
 		}
 
 		users = append(users, user)
@@ -282,7 +294,7 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 	assignProductsToUsers(users, req.Products)
 
 	// Calculate volumes
-	calculateVolumes(users)
+	calculateVolumes(users, req.GenealogyType)
 
 	// Generate simulation summary
 	summary := generateSimulationSummary(users, req.Products, req.NumberOfPayoutCycles)
@@ -345,14 +357,15 @@ func assignProductBasedOnSalesRatio(products []BusinessProduct) BusinessProduct 
 }
 
 // calculateVolumes calculates personal and team volumes for all users
-func calculateVolumes(users []SimulationUser) {
+func calculateVolumes(users []SimulationUser, genealogyType string) {
 	log.Printf("Calculating volumes for %d users", len(users))
 
 	// Personal volumes are already set during product assignment
 
-	// Calculate team volumes (unlimited genealogy levels)
+	// Calculate team volumes (unlimited genealogy levels) and leg-specific volumes
 	for i := range users {
 		users[i].TeamVolume = calculateTeamVolume(users[i].ID, users)
+		users[i].TeamLegVolumes = calculateTeamLegVolumes(users[i].ID, users, genealogyType)
 	}
 
 	log.Println("Volume calculations completed")
@@ -386,6 +399,133 @@ func calculateTeamVolume(userID string, users []SimulationUser) float64 {
 	}
 
 	return teamVolume
+}
+
+// calculateTeamLegVolumes calculates team volume for each leg of a user
+func calculateTeamLegVolumes(userID string, users []SimulationUser, genealogyType string) map[string]float64 {
+	legVolumes := make(map[string]float64)
+
+	// Initialize leg volumes based on genealogy type
+	switch genealogyType {
+	case "binary":
+		legVolumes["left"] = 0.0
+		legVolumes["right"] = 0.0
+	case "unilevel", "matrix":
+		// For unilevel/matrix, create legs based on average children per node
+		legVolumes["leg-1"] = 0.0
+		legVolumes["leg-2"] = 0.0
+		legVolumes["leg-3"] = 0.0
+		legVolumes["leg-4"] = 0.0
+		legVolumes["leg-5"] = 0.0
+	default:
+		return legVolumes
+	}
+
+	// Find the user
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil || len(user.Children) == 0 {
+		return legVolumes
+	}
+
+	// Calculate volume for each leg
+	for i, childID := range user.Children {
+		var legKey string
+
+		switch genealogyType {
+		case "binary":
+			if i == 0 {
+				legKey = "left"
+			} else {
+				legKey = "right"
+			}
+		case "unilevel", "matrix":
+			legKey = fmt.Sprintf("leg-%d", i+1)
+		}
+
+		if legKey != "" {
+			legVolumes[legKey] = calculateLegVolume(childID, users, genealogyType)
+		}
+	}
+
+	return legVolumes
+}
+
+// calculateLegVolume calculates volume for a specific leg
+func calculateLegVolume(userID string, users []SimulationUser, genealogyType string) float64 {
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil {
+		return 0
+	}
+
+	legVolume := user.PersonalVolume
+
+	// Recursively calculate volume for all downline in this leg
+	for _, childID := range user.Children {
+		legVolume += calculateLegVolume(childID, users, genealogyType)
+	}
+
+	return legVolume
+}
+
+// calculateLegVolumeSummary calculates summary statistics for all legs
+func calculateLegVolumeSummary(users []SimulationUser) map[string]LegVolumeData {
+	legSummary := make(map[string]LegVolumeData)
+	
+	// Initialize leg data structures
+	legs := []string{"left", "right", "leg-1", "leg-2", "leg-3", "leg-4", "leg-5"}
+	for _, leg := range legs {
+		legSummary[leg] = LegVolumeData{
+			TotalVolume:   0.0,
+			UserCount:     0,
+			AverageVolume: 0.0,
+			MaxVolume:     0.0,
+			MinVolume:     0.0,
+		}
+	}
+	
+	// Collect data for each leg
+	for _, user := range users {
+		for legName, legVolume := range user.TeamLegVolumes {
+			if legData, exists := legSummary[legName]; exists {
+				legData.TotalVolume += legVolume
+				legData.UserCount++
+				
+				if legVolume > legData.MaxVolume {
+					legData.MaxVolume = legVolume
+				}
+				
+				if legData.MinVolume == 0 || legVolume < legData.MinVolume {
+					legData.MinVolume = legVolume
+				}
+				
+				legSummary[legName] = legData
+			}
+		}
+	}
+	
+	// Calculate averages
+	for legName, legData := range legSummary {
+		if legData.UserCount > 0 {
+			legData.AverageVolume = legData.TotalVolume / float64(legData.UserCount)
+			legSummary[legName] = legData
+		}
+	}
+	
+	return legSummary
 }
 
 // generateSimulationSummary generates comprehensive simulation analytics
@@ -443,6 +583,9 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 		averageTeamVolume = totalTeamVolume / float64(len(users))
 	}
 
+	// Calculate leg volume summary
+	legVolumeSummary := calculateLegVolumeSummary(users)
+
 	return SimulationSummary{
 		TotalUsersGenerated: len(users),
 		UsersPerCycle:       usersPerCycle,
@@ -450,5 +593,6 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 		TotalPersonalVolume: totalPersonalVolume,
 		TotalTeamVolume:     totalTeamVolume,
 		AverageTeamVolume:   averageTeamVolume,
+		LegVolumeSummary:    legVolumeSummary,
 	}
 }
