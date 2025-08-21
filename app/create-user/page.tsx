@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowLeft, UserPlus, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
-import Header from '@/components/header'
+
 
 const countries = [
   'United States', 'India', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Brazil', 'Japan', 'China',
@@ -143,10 +143,20 @@ export default function CreateUserPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="Create User" showBackButton backUrl="/" />
-
       <main className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          <div className="mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <Link href="/">
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">Create New User</h1>
+            <p className="text-gray-600 mt-2">Fill in the details below to create a new user account.</p>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>Create New User</CardTitle>

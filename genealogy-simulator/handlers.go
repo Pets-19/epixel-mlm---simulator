@@ -36,7 +36,7 @@ func InitDB() {
 
 // handleGetGenealogyTypes returns all available genealogy types
 func handleGetGenealogyTypes(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, name, description, max_children_per_node, rules, is_active, created_at, updated_at FROM genealogy_types WHERE is_active = true")
+	rows, err := db.Query("SELECT id, name, description, is_active, created_at, updated_at FROM genealogy_types WHERE is_active = true")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -46,18 +46,18 @@ func handleGetGenealogyTypes(w http.ResponseWriter, r *http.Request) {
 	var types []GenealogyType
 	for rows.Next() {
 		var gt GenealogyType
-		var rulesJSON []byte
-		err := rows.Scan(&gt.ID, &gt.Name, &gt.Description, &gt.MaxChildrenPerNode, &rulesJSON, &gt.IsActive, &gt.CreatedAt, &gt.UpdatedAt)
+		err := rows.Scan(&gt.ID, &gt.Name, &gt.Description, &gt.IsActive, &gt.CreatedAt, &gt.UpdatedAt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		err = json.Unmarshal(rulesJSON, &gt.Rules)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		// Set default values for missing fields
+		gt.MaxChildrenPerNode = 2 // Default for Binary Plan
+		if gt.Name == "Matrix" || gt.Name == "Unilevel" {
+			gt.MaxChildrenPerNode = 5 // Default for Matrix/Unilevel
 		}
+		gt.Rules = make(map[string]interface{}) // Empty rules for now
 
 		types = append(types, gt)
 	}
@@ -101,11 +101,11 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 	// Create simulator based on genealogy type
 	var response SimulationResponse
 	switch genealogyType.Name {
-	case "Binary Plan":
+	case "Binary":
 		log.Println("Creating binary plan simulator")
 		simulator := NewBinaryPlanSimulator(simulationID)
 		response = simulator.Simulate(req)
-	case "Unilevel Plan":
+	case "Unilevel":
 		log.Println("Creating unilevel plan simulator")
 		maxChildrenCount := req.MaxChildrenCount
 		if maxChildrenCount <= 0 {
@@ -113,7 +113,7 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 		}
 		simulator := NewUnilevelPlanSimulator(simulationID, maxChildrenCount)
 		response = simulator.Simulate(req)
-	case "Matrix Plan":
+	case "Matrix":
 		log.Println("Creating matrix plan simulator")
 		maxChildrenCount := req.MaxChildrenCount
 		if maxChildrenCount <= 0 {
@@ -169,21 +169,22 @@ func handleSaveSimulation(w http.ResponseWriter, r *http.Request) {
 // getGenealogyTypeByID retrieves a genealogy type by ID
 func getGenealogyTypeByID(id int) (*GenealogyType, error) {
 	var gt GenealogyType
-	var rulesJSON []byte
 
 	err := db.QueryRow(
-		"SELECT id, name, description, max_children_per_node, rules, is_active, created_at, updated_at FROM genealogy_types WHERE id = $1",
+		"SELECT id, name, description, is_active, created_at, updated_at FROM genealogy_types WHERE id = $1",
 		id,
-	).Scan(&gt.ID, &gt.Name, &gt.Description, &gt.MaxChildrenPerNode, &rulesJSON, &gt.IsActive, &gt.CreatedAt, &gt.UpdatedAt)
+	).Scan(&gt.ID, &gt.Name, &gt.Description, &gt.IsActive, &gt.CreatedAt, &gt.UpdatedAt)
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal(rulesJSON, &gt.Rules)
-	if err != nil {
-		return nil, err
+	// Set default values for missing fields
+	gt.MaxChildrenPerNode = 2 // Default for Binary Plan
+	if gt.Name == "Matrix" || gt.Name == "Unilevel" {
+		gt.MaxChildrenPerNode = 5 // Default for Matrix/Unilevel
 	}
+	gt.Rules = make(map[string]interface{}) // Empty rules for now
 
 	return &gt, nil
 }

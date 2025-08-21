@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ArrowLeft, Save, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
-import Header from '@/components/header'
+
 
 export default function ChangePasswordPage() {
   const { user, logout } = useAuth()
@@ -98,10 +98,20 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="Change Password" showBackButton backUrl="/profile" />
-
       <main className="max-w-2xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          <div className="mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <Link href="/profile">
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Profile
+                </Button>
+              </Link>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">Change Password</h1>
+            <p className="text-gray-600 mt-2">Update your password to keep your account secure.</p>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>Change Password</CardTitle>

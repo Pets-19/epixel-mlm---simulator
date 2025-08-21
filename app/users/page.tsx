@@ -37,7 +37,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ChevronLeft, ChevronRight, Search, Edit, Key, Plus, Trash2, CheckSquare, Square } from 'lucide-react'
 import Image from 'next/image'
-import Header from '@/components/header'
+
 
 interface User {
   id: number
@@ -352,19 +352,28 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="User Management">
-        <a href="/">
-          <Button variant="outline">Dashboard</Button>
-        </a>
-        <a href="/create-user">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Create User
-          </Button>
-        </a>
-      </Header>
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+              <p className="text-gray-600 mt-2">
+                Manage all users in the system. System admin users are protected from deletion.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <a href="/">
+                <Button variant="outline">Dashboard</Button>
+              </a>
+              <a href="/create-user">
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create User
+                </Button>
+              </a>
+            </div>
+          </div>
+        </div>
         {/* Filters */}
         <Card className="mb-6">
           <CardHeader>

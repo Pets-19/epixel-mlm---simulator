@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Play, Save, RotateCcw } from 'lucide-react'
 import GenealogyTreeView from '@/components/genealogy-tree-view'
-import Header from '@/components/header'
+
 
 interface GenealogyType {
   id: number
@@ -156,11 +156,10 @@ export default function GenealogySimulationPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="Genealogy Simulation" />
-
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Genealogy Simulation</h1>
             <p className="text-gray-600 mt-2">
               Test and simulate node filling logic based on genealogy type rules
             </p>

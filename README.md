@@ -22,14 +22,11 @@ open http://localhost:3000
 ## 📚 Documentation
 
 ### Complete Documentation Suite
-- **[Technical Documentation](./TECHNICAL_DOCUMENTATION.md)** - System architecture and technical details
+- **[Comprehensive Technical Guide](./COMPREHENSIVE_TECHNICAL_GUIDE.md)** - Complete technical and implementation reference
 - **[Project Requirements](./PROJECT_REQUIREMENTS.md)** - User stories and requirements specification
-- **[API Documentation](./API_DOCUMENTATION.md)** - Complete API reference with examples
-- **[Development Guide](./DEVELOPMENT_GUIDE.md)** - Development guidelines and processes
-- **[Documentation Index](./DOCUMENTATION_INDEX.md)** - Complete documentation overview
-
-### Version Information
 - **[Version 4.2 Checkpoint](./VERSION_4.2_CHECKPOINT.md)** - Complete version 4.2 details and changes
+
+
 
 ## ✨ Features
 
@@ -114,6 +111,12 @@ docker compose build --no-cache
 
 # Stop all services
 docker compose down
+
+# Quick project restart with fresh database
+./scripts/restart_project.sh
+
+# Create database backup
+docker compose exec postgres pg_dump -U postgres -d epixel_mlm_tools --clean --if-exists --create --verbose > database/backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ## 📊 System Architecture
@@ -140,6 +143,26 @@ docker compose down
 - Version-controlled migrations
 - Proper indexing for performance
 - Data integrity enforcement
+
+## 💾 Database Backup & Restart
+
+### Quick Restart
+```bash
+# Restart project with fresh database and sample data
+./scripts/restart_project.sh
+```
+
+### Backup Files
+- **`database/complete_migration.sql`** - Complete database setup with sample data
+- **`database/backup_*.sql`** - Timestamped database backups
+- **`scripts/restart_project.sh`** - Automated restart script
+
+### Sample Data
+- System Admin: `admin@epixel.com` / `password123`
+- Business User: `business@epixel.com` / `password123`
+- Sample business plans and products included
+
+For detailed backup and restart instructions, see [Database Backup & Restart Guide](./DATABASE_BACKUP_RESTART_GUIDE.md).
 
 ## 🔒 Security
 
