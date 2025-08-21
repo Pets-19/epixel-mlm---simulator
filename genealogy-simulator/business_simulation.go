@@ -11,33 +11,33 @@ import (
 
 // BusinessProduct represents a product in the business plan
 type BusinessProduct struct {
-	ID                 int     `json:"id"`
-	ProductName        string  `json:"product_name"`
-	ProductPrice       float64 `json:"product_price"`
-	BusinessVolume     float64 `json:"business_volume"`
-	ProductSalesRatio  float64 `json:"product_sales_ratio"`
-	ProductType        string  `json:"product_type"`
-	SortOrder          int     `json:"sort_order"`
-	IsActive           bool    `json:"is_active"`
+	ID                int     `json:"id"`
+	ProductName       string  `json:"product_name"`
+	ProductPrice      float64 `json:"product_price"`
+	BusinessVolume    float64 `json:"business_volume"`
+	ProductSalesRatio float64 `json:"product_sales_ratio"`
+	ProductType       string  `json:"product_type"`
+	SortOrder         int     `json:"sort_order"`
+	IsActive          bool    `json:"is_active"`
 }
 
 // SimulationUser represents a user in the simulation with product assignment
 type SimulationUser struct {
-	ID                   string             `json:"id"`
-	Name                 string             `json:"name"`
-	Email                string             `json:"email"`
-	Level                int                `json:"level"`
-	ParentID             *string            `json:"parent_id,omitempty"`
-	Children             []string           `json:"children"`
-	GenealogyPosition    string             `json:"genealogy_position"`
-	ProductID            *int               `json:"product_id,omitempty"`
-	ProductName          *string            `json:"product_name,omitempty"`
-	PersonalVolume       float64            `json:"personal_volume"`
-	TeamVolume           float64            `json:"team_volume"`
-	CommissionableVolume float64            `json:"commissionable_volume"`
-	PayoutCycle          int                `json:"payout_cycle"`
-	CreatedAt            time.Time          `json:"created_at"`
-	GenealogyNode        *GenealogyNode     `json:"genealogy_node,omitempty"`
+	ID                   string         `json:"id"`
+	Name                 string         `json:"name"`
+	Email                string         `json:"email"`
+	Level                int            `json:"level"`
+	ParentID             *string        `json:"parent_id,omitempty"`
+	Children             []string       `json:"children"`
+	GenealogyPosition    string         `json:"genealogy_position"`
+	ProductID            *int           `json:"product_id,omitempty"`
+	ProductName          *string        `json:"product_name,omitempty"`
+	PersonalVolume       float64        `json:"personal_volume"`
+	TeamVolume           float64        `json:"team_volume"`
+	CommissionableVolume float64        `json:"commissionable_volume"`
+	PayoutCycle          int            `json:"payout_cycle"`
+	CreatedAt            time.Time      `json:"created_at"`
+	GenealogyNode        *GenealogyNode `json:"genealogy_node,omitempty"`
 }
 
 // BusinessSimulationRequest represents the enhanced simulation request
@@ -52,28 +52,28 @@ type BusinessSimulationRequest struct {
 
 // BusinessSimulationResponse represents the enhanced simulation response
 type BusinessSimulationResponse struct {
-	ID               string                 `json:"id"`
-	GenealogyType    string                 `json:"genealogy_type"`
-	MaxExpectedUsers int                    `json:"max_expected_users"`
-	PayoutCycle      string                 `json:"payout_cycle"`
-	NumberOfPayoutCycles int               `json:"number_of_payout_cycles"`
-	MaxChildrenCount int                    `json:"max_children_count"`
-	Products         []BusinessProduct      `json:"products"`
-	Users            []SimulationUser       `json:"users"`
-	GenealogyStructure map[string][]string  `json:"genealogy_structure"`
-	SimulationSummary  SimulationSummary    `json:"simulation_summary"`
-	CreatedAt        time.Time              `json:"created_at"`
-	UpdatedAt        time.Time              `json:"updated_at"`
+	ID                   string              `json:"id"`
+	GenealogyType        string              `json:"genealogy_type"`
+	MaxExpectedUsers     int                 `json:"max_expected_users"`
+	PayoutCycle          string              `json:"payout_cycle"`
+	NumberOfPayoutCycles int                 `json:"number_of_payout_cycles"`
+	MaxChildrenCount     int                 `json:"max_children_count"`
+	Products             []BusinessProduct   `json:"products"`
+	Users                []SimulationUser    `json:"users"`
+	GenealogyStructure   map[string][]string `json:"genealogy_structure"`
+	SimulationSummary    SimulationSummary   `json:"simulation_summary"`
+	CreatedAt            time.Time           `json:"created_at"`
+	UpdatedAt            time.Time           `json:"updated_at"`
 }
 
 // SimulationSummary provides analytics for the simulation
 type SimulationSummary struct {
-	TotalUsersGenerated int                                    `json:"total_users_generated"`
-	UsersPerCycle       map[int]int                            `json:"users_per_cycle"`
-	ProductDistribution map[string]ProductDistributionData    `json:"product_distribution"`
-	TotalPersonalVolume float64                                `json:"total_personal_volume"`
-	TotalTeamVolume     float64                                `json:"total_team_volume"`
-	AverageTeamVolume   float64                                `json:"average_team_volume"`
+	TotalUsersGenerated int                                `json:"total_users_generated"`
+	UsersPerCycle       map[int]int                        `json:"users_per_cycle"`
+	ProductDistribution map[string]ProductDistributionData `json:"product_distribution"`
+	TotalPersonalVolume float64                            `json:"total_personal_volume"`
+	TotalTeamVolume     float64                            `json:"total_team_volume"`
+	AverageTeamVolume   float64                            `json:"average_team_volume"`
 }
 
 // ProductDistributionData represents product distribution statistics
@@ -84,6 +84,12 @@ type ProductDistributionData struct {
 
 // handleBusinessSimulation handles the enhanced business simulation with products and volumes
 func handleBusinessSimulation(w http.ResponseWriter, r *http.Request) {
+	// Handle OPTIONS request for CORS preflight
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	log.Println("Received business simulation request")
 
 	var req BusinessSimulationRequest
@@ -282,18 +288,18 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 	summary := generateSimulationSummary(users, req.Products, req.NumberOfPayoutCycles)
 
 	return BusinessSimulationResponse{
-		ID:                 simResponse.SimulationID,
-		GenealogyType:      req.GenealogyType,
-		MaxExpectedUsers:   req.MaxExpectedUsers,
-		PayoutCycle:        req.PayoutCycle,
+		ID:                   simResponse.SimulationID,
+		GenealogyType:        req.GenealogyType,
+		MaxExpectedUsers:     req.MaxExpectedUsers,
+		PayoutCycle:          req.PayoutCycle,
 		NumberOfPayoutCycles: req.NumberOfPayoutCycles,
-		MaxChildrenCount:   req.MaxChildrenCount,
-		Products:           req.Products,
-		Users:              users,
-		GenealogyStructure: genealogyStructure,
-		SimulationSummary:  summary,
-		CreatedAt:          simResponse.CreatedAt,
-		UpdatedAt:          time.Now(),
+		MaxChildrenCount:     req.MaxChildrenCount,
+		Products:             req.Products,
+		Users:                users,
+		GenealogyStructure:   genealogyStructure,
+		SimulationSummary:    summary,
+		CreatedAt:            simResponse.CreatedAt,
+		UpdatedAt:            time.Now(),
 	}
 }
 
@@ -312,7 +318,7 @@ func assignProductsToUsers(users []SimulationUser, products []BusinessProduct) {
 	// Assign products randomly based on sales ratios
 	for _, user := range usersToAssign {
 		product := assignProductBasedOnSalesRatio(products)
-		
+
 		user.ProductID = &product.ID
 		user.ProductName = &product.ProductName
 		user.CommissionableVolume = product.BusinessVolume
@@ -326,14 +332,14 @@ func assignProductsToUsers(users []SimulationUser, products []BusinessProduct) {
 func assignProductBasedOnSalesRatio(products []BusinessProduct) BusinessProduct {
 	random := rand.Float64() * 100
 	cumulativeRatio := 0.0
-	
+
 	for _, product := range products {
 		cumulativeRatio += product.ProductSalesRatio
 		if random <= cumulativeRatio {
 			return product
 		}
 	}
-	
+
 	// Fallback to last product
 	return products[len(products)-1]
 }
@@ -343,7 +349,7 @@ func calculateVolumes(users []SimulationUser) {
 	log.Printf("Calculating volumes for %d users", len(users))
 
 	// Personal volumes are already set during product assignment
-	
+
 	// Calculate team volumes (unlimited genealogy levels)
 	for i := range users {
 		users[i].TeamVolume = calculateTeamVolume(users[i].ID, users)
@@ -367,7 +373,7 @@ func calculateTeamVolume(userID string, users []SimulationUser) float64 {
 	}
 
 	teamVolume := 0.0
-	
+
 	// Recursively calculate team volume
 	for _, childID := range user.Children {
 		for i := range users {
@@ -378,7 +384,7 @@ func calculateTeamVolume(userID string, users []SimulationUser) float64 {
 			}
 		}
 	}
-	
+
 	return teamVolume
 }
 
@@ -388,14 +394,14 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 
 	usersPerCycle := make(map[int]int)
 	productDistribution := make(map[string]ProductDistributionData)
-	
+
 	// Count users per cycle
 	for _, user := range users {
 		if user.PayoutCycle > 0 {
 			usersPerCycle[user.PayoutCycle]++
 		}
 	}
-	
+
 	// Calculate product distribution
 	usersWithProducts := make([]SimulationUser, 0)
 	for _, user := range users {
@@ -403,7 +409,7 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 			usersWithProducts = append(usersWithProducts, user)
 		}
 	}
-	
+
 	for _, product := range products {
 		count := 0
 		for _, user := range usersWithProducts {
@@ -411,32 +417,32 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 				count++
 			}
 		}
-		
+
 		percentage := 0.0
 		if len(usersWithProducts) > 0 {
 			percentage = (float64(count) / float64(len(usersWithProducts))) * 100
 		}
-		
+
 		productDistribution[product.ProductName] = ProductDistributionData{
 			Count:      count,
 			Percentage: percentage,
 		}
 	}
-	
+
 	// Calculate total volumes
 	totalPersonalVolume := 0.0
 	totalTeamVolume := 0.0
-	
+
 	for _, user := range users {
 		totalPersonalVolume += user.PersonalVolume
 		totalTeamVolume += user.TeamVolume
 	}
-	
+
 	averageTeamVolume := 0.0
 	if len(users) > 0 {
 		averageTeamVolume = totalTeamVolume / float64(len(users))
 	}
-	
+
 	return SimulationSummary{
 		TotalUsersGenerated: len(users),
 		UsersPerCycle:       usersPerCycle,

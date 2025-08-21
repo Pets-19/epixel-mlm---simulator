@@ -19,9 +19,12 @@ func main() {
 
 	r := mux.NewRouter()
 
+	// CORS middleware - apply before routes
+	r.Use(corsMiddleware)
+
 	// API routes
 	r.HandleFunc("/api/genealogy/simulate", handleSimulation).Methods("POST")
-	r.HandleFunc("/api/genealogy/business-simulate", handleBusinessSimulation).Methods("POST")
+	r.HandleFunc("/api/genealogy/business-simulate", handleBusinessSimulation).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/genealogy/types", handleGetGenealogyTypes).Methods("GET")
 	r.HandleFunc("/api/genealogy/save-simulation", handleSaveSimulation).Methods("POST")
 
@@ -31,9 +34,6 @@ func main() {
 	r.HandleFunc("/api/genealogy/upline/{node_id}", handleGetUplineUsers).Methods("GET")
 	r.HandleFunc("/api/genealogy/structure/{genealogy_type_id}", handleGetGenealogyStructure).Methods("GET")
 	r.HandleFunc("/api/genealogy/add-user", handleAddUserToGenealogy).Methods("POST")
-
-	// CORS middleware
-	r.Use(corsMiddleware)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -46,15 +46,19 @@ func main() {
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
 
+		// Handle preflight requests
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
+		// Continue to next handler
 		next.ServeHTTP(w, r)
 	})
 }
