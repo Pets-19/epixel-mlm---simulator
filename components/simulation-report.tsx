@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 
 interface SimulationUser {
   id: string
@@ -407,16 +408,75 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
   const [itemsPerPage, setItemsPerPage] = useState(10)
   const [sortField, setSortField] = useState<keyof SimulationUser>('name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [selectedPayoutCycle, setSelectedPayoutCycle] = useState<string>('all')
 
   const users = simulationResult.users || []
   const summary = simulationResult.simulation_summary
 
-  // Filter users based on search term
-  const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (user.product_name && user.product_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  // Filter users by payout cycle and search term
+  const filteredUsers = users.filter(user => {
+    // Filter by payout cycle
+    if (selectedPayoutCycle !== 'all' && user.payout_cycle.toString() !== selectedPayoutCycle) {
+      return false
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        user.name.toLowerCase().includes(searchLower) ||
+        user.email.toLowerCase().includes(searchLower) ||
+        (user.product_name && user.product_name.toLowerCase().includes(searchLower))
+      )
+    }
+    
+    return true
+  })
+
+  // Group users by payout cycle for summary
+  const usersByCycle = users.reduce((acc, user) => {
+    const cycle = user.payout_cycle.toString()
+    if (!acc[cycle]) {
+      acc[cycle] = []
+    }
+    acc[cycle].push(user)
+    return acc
+  }, {} as Record<string, SimulationUser[]>)
+
+  // Calculate cycle summaries
+  const cycleSummaries = Object.entries(usersByCycle).map(([cycle, cycleUsers]) => {
+    const personalVolume = cycleUsers.reduce((sum, user) => sum + user.personal_volume, 0)
+    const teamVolume = cycleUsers.reduce((sum, user) => sum + user.team_volume, 0)
+    
+    // Calculate leg volumes for this cycle
+    const legVolumes: Record<string, number> = {}
+    cycleUsers.forEach(user => {
+      Object.entries(user.team_leg_volumes).forEach(([leg, volume]) => {
+        if (!legVolumes[leg]) legVolumes[leg] = 0
+        legVolumes[leg] += volume
+      })
+    })
+
+    return {
+      cycle,
+      users: cycleUsers,
+      userCount: cycleUsers.length,
+      personalVolume,
+      teamVolume,
+      legVolumes
+    }
+  }).sort((a, b) => parseInt(a.cycle) - parseInt(b.cycle))
+
+  // Get available payout cycles for filter
+  const availablePayoutCycles = Object.keys(usersByCycle).sort((a, b) => parseInt(a) - parseInt(b))
+
+  // Helper function to get leg label
+  const getLegLabel = (position: string, genealogyType: string) => {
+    if (genealogyType === 'binary') {
+      return position === 'left' ? 'Left Leg' : 'Right Leg'
+    }
+    return `Leg ${position.replace('leg-', '')}`
+  }
 
   // Sort users
   const sortedUsers = [...filteredUsers].sort((a, b) => {
@@ -766,56 +826,77 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex space-x-1 mb-4">
-            <Button
-              variant={activeTab === 'tree' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveTab('tree')}
-              className="flex items-center"
-            >
-              <TreePine className="w-4 h-4 mr-2" />
-              Tree View
-            </Button>
-            <Button
-              variant={activeTab === 'table' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setActiveTab('table')}
-              className="flex items-center"
-            >
-              <Table className="w-4 h-4 mr-2" />
-              Table View
-            </Button>
-          </div>
-
-          {/* Search and Filter */}
-          <div className="flex items-center space-x-4 mb-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="Search users, products, or emails..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          <div className="flex items-center space-x-4 mb-6">
+            <div className="flex items-center space-x-2">
+              <Button
+                variant={activeTab === 'tree' ? 'default' : 'outline'}
+                onClick={() => setActiveTab('tree')}
+                className="flex items-center"
+              >
+                <TreePine className="w-4 h-4 mr-2" />
+                Tree View
+              </Button>
+              <Button
+                variant={activeTab === 'table' ? 'default' : 'outline'}
+                onClick={() => setActiveTab('table')}
+                className="flex items-center"
+              >
+                <Table className="w-4 h-4 mr-2" />
+                Table View
+              </Button>
             </div>
-            <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="10">10 per page</SelectItem>
-                <SelectItem value="25">25 per page</SelectItem>
-                <SelectItem value="50">50 per page</SelectItem>
-                <SelectItem value="100">100 per page</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Payout Cycle Filter */}
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="payout-cycle-filter" className="text-sm font-medium">
+                Filter by Payout Cycle:
+              </Label>
+              <Select value={selectedPayoutCycle} onValueChange={setSelectedPayoutCycle}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="All Cycles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cycles</SelectItem>
+                  {availablePayoutCycles.map(cycle => (
+                    <SelectItem key={cycle} value={cycle}>
+                      Cycle {cycle}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Search className="w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-64"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="items-per-page" className="text-sm font-medium">
+                Items per page:
+              </Label>
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(parseInt(value))}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Tree View */}
           {activeTab === 'tree' && (
-            <div className="space-y-2">
+            <div className="space-y-4">
               {users
                 .filter(user => !user.parent_id) // Root users only
                 .map(user => (
@@ -836,6 +917,62 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
           {/* Table View */}
           {activeTab === 'table' && (
             <div>
+              {/* Payout Cycle Summary Cards */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4">Payout Cycle Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {cycleSummaries.map((cycleSummary) => (
+                    <Card key={cycleSummary.cycle} className="border-2 border-blue-200">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center justify-between">
+                          <span>Payout Cycle {cycleSummary.cycle}</span>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                            {cycleSummary.userCount} users
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center p-2 bg-green-50 rounded-lg">
+                            <div className="text-lg font-bold text-green-800">
+                              ${cycleSummary.personalVolume.toLocaleString()}
+                            </div>
+                            <div className="text-sm text-green-600">Personal Volume</div>
+                          </div>
+                          
+                          <div className="text-center p-2 bg-blue-50 rounded-lg">
+                            <div className="text-lg font-bold text-blue-800">
+                              ${cycleSummary.teamVolume.toLocaleString()}
+                            </div>
+                            <div className="text-sm text-blue-600">Team Volume</div>
+                          </div>
+                        </div>
+                        
+                        {/* Leg Volumes */}
+                        {Object.keys(cycleSummary.legVolumes).length > 0 && (
+                          <div>
+                            <div className="text-sm font-medium text-gray-700 mb-2">Leg Volumes:</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {Object.entries(cycleSummary.legVolumes).map(([leg, volume]) => (
+                                <div key={leg} className="text-center p-2 bg-purple-50 rounded border">
+                                  <div className="text-sm font-medium text-purple-800">
+                                    {getLegLabel(leg, simulationResult.genealogy_type)}
+                                  </div>
+                                  <div className="text-lg font-bold text-purple-600">
+                                    ${volume.toLocaleString()}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+
+              {/* Users Table */}
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse border border-gray-200">
                   <thead>
@@ -987,9 +1124,9 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
               </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-700">
-                  Showing {startIndex + 1} to {Math.min(endIndex, sortedUsers.length)} of {sortedUsers.length} results
+                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} results
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -1001,13 +1138,13 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
                     Previous
                   </Button>
                   <span className="text-sm text-gray-700">
-                    Page {currentPage} of {totalPages}
+                    Page {currentPage} of {Math.ceil(filteredUsers.length / itemsPerPage)}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage >= Math.ceil(filteredUsers.length / itemsPerPage)}
                   >
                     Next
                   </Button>
