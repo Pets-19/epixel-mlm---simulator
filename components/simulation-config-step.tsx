@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Loader2, Play, CheckCircle, AlertCircle, Users, TrendingUp, Calendar, GitBranch, Package, Settings } from 'lucide-react'
+import { Loader2, Play, CheckCircle, AlertCircle, Users, TrendingUp, Calendar, GitBranch, Package, Settings, BarChart3 } from 'lucide-react'
 import { SimulationConfig, BusinessProduct } from '@/lib/business-plan'
 // Removed SimulationEngine import - now using Go API
+import SimulationReport from './simulation-report'
 
 interface SimulationConfigStepProps {
   config: SimulationConfig | null
@@ -502,48 +503,20 @@ export default function SimulationConfigStep({
               </div>
               
               <div className="text-center p-3 bg-purple-50 rounded-lg">
-                <GitBranch className="w-8 h-8 text-purple-500 mx-auto mb-2" />
+                <BarChart3 className="w-8 h-8 text-purple-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-purple-800">
                   ${(simulationResult.simulation_summary?.total_team_volume || 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-purple-600">Team Volume</p>
               </div>
             </div>
-
-            <Separator className="my-4" />
-
-            {/* Product Distribution */}
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Product Distribution</h4>
-              <div className="space-y-2">
-                {simulationResult.simulation_summary?.product_distribution && Object.entries(simulationResult.simulation_summary.product_distribution).map(([productName, data]: [string, any]) => (
-                  <div key={productName} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <span className="text-sm font-medium">{productName}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">{data.count} users</span>
-                      <Badge variant="outline">{data.percentage.toFixed(1)}%</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <Separator className="my-4" />
-
-            {/* Users Per Cycle */}
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Users Generated Per Cycle</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {simulationResult.simulation_summary?.users_per_cycle && Object.entries(simulationResult.simulation_summary.users_per_cycle).map(([cycle, count]: [string, any]) => (
-                  <div key={cycle} className="text-center p-2 bg-gray-50 rounded">
-                    <p className="text-lg font-bold text-gray-800">{count}</p>
-                    <p className="text-xs text-gray-600">Cycle {cycle}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Detailed Simulation Report */}
+      {simulationResult && (
+        <SimulationReport simulationResult={simulationResult} />
       )}
     </div>
   )

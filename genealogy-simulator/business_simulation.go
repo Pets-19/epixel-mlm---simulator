@@ -63,6 +63,7 @@ type BusinessSimulationResponse struct {
 	Users                []SimulationUser    `json:"users"`
 	GenealogyStructure   map[string][]string `json:"genealogy_structure"`
 	SimulationSummary    SimulationSummary   `json:"simulation_summary"`
+	VolumeCalculations   VolumeCalculations  `json:"volume_calculations"`
 	CreatedAt            time.Time           `json:"created_at"`
 	UpdatedAt            time.Time           `json:"updated_at"`
 }
@@ -91,6 +92,67 @@ type LegVolumeData struct {
 type ProductDistributionData struct {
 	Count      int     `json:"count"`
 	Percentage float64 `json:"percentage"`
+}
+
+// VolumeCalculations provides detailed breakdown of volume calculations
+type VolumeCalculations struct {
+	PersonalVolumeBreakdown map[string]PersonalVolumeDetail `json:"personal_volume_breakdown"`
+	TeamVolumeBreakdown     map[string]TeamVolumeDetail     `json:"team_volume_breakdown"`
+	LegVolumeBreakdown      map[string]LegVolumeDetail      `json:"leg_volume_breakdown"`
+	CalculationMethodology  string                          `json:"calculation_methodology"`
+}
+
+// PersonalVolumeDetail shows how personal volume was calculated for each user
+type PersonalVolumeDetail struct {
+	UserID               string  `json:"user_id"`
+	UserName             string  `json:"user_name"`
+	ProductID            *int    `json:"product_id,omitempty"`
+	ProductName          *string `json:"product_name,omitempty"`
+	ProductPrice         float64 `json:"product_price"`
+	CommissionableVolume float64 `json:"commissionable_volume"`
+	Calculation          string  `json:"calculation"`
+}
+
+// TeamVolumeDetail shows how team volume was calculated for each user
+type TeamVolumeDetail struct {
+	UserID          string                     `json:"user_id"`
+	UserName        string                     `json:"user_name"`
+	DirectDownline  []string                   `json:"direct_downline"`
+	TotalDownline   int                        `json:"total_downline"`
+	DownlineVolumes map[string]float64         `json:"downline_volumes"`
+	Calculation     string                     `json:"calculation"`
+	VolumeBreakdown map[string]VolumeBreakdown `json:"volume_breakdown"`
+}
+
+// VolumeBreakdown shows volume breakdown by level
+type VolumeBreakdown struct {
+	Level  int     `json:"level"`
+	Users  int     `json:"users"`
+	Volume float64 `json:"volume"`
+}
+
+// LegVolumeDetail shows how leg volume was calculated for each user
+type LegVolumeDetail struct {
+	UserID       string                  `json:"user_id"`
+	UserName     string                  `json:"user_name"`
+	LegStructure map[string]LegStructure `json:"leg_structure"`
+	Calculation  string                  `json:"calculation"`
+}
+
+// LegStructure shows the structure of each leg
+type LegStructure struct {
+	LegKey         string            `json:"leg_key"`
+	DirectChildren []string          `json:"direct_children"`
+	TotalUsers     int               `json:"total_users"`
+	TotalVolume    float64           `json:"total_volume"`
+	LevelBreakdown map[int]LevelData `json:"level_breakdown"`
+}
+
+// LevelData shows data for each level in a leg
+type LevelData struct {
+	Level  int     `json:"level"`
+	Users  int     `json:"users"`
+	Volume float64 `json:"volume"`
 }
 
 // handleBusinessSimulation handles the enhanced business simulation with products and volumes
@@ -299,6 +361,9 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 	// Generate simulation summary
 	summary := generateSimulationSummary(users, req.Products, req.NumberOfPayoutCycles)
 
+	// Generate volume calculations breakdown
+	volumeCalculations := generateVolumeCalculations(users, req.Products, req.GenealogyType)
+
 	return BusinessSimulationResponse{
 		ID:                   simResponse.SimulationID,
 		GenealogyType:        req.GenealogyType,
@@ -310,6 +375,7 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 		Users:                users,
 		GenealogyStructure:   genealogyStructure,
 		SimulationSummary:    summary,
+		VolumeCalculations:   volumeCalculations,
 		CreatedAt:            simResponse.CreatedAt,
 		UpdatedAt:            time.Now(),
 	}
@@ -550,20 +616,21 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 		}
 	}
 
-	for _, product := range products {
-		count := 0
-		for _, user := range usersWithProducts {
-			if user.ProductID != nil && *user.ProductID == product.ID {
-				count++
-			}
+	// Calculate product distribution
+	productCounts := make(map[string]int)
+	for _, user := range usersWithProducts {
+		if user.ProductName != nil {
+			productCounts[*user.ProductName]++
 		}
+	}
 
+	totalUsersWithProducts := len(usersWithProducts)
+	for productName, count := range productCounts {
 		percentage := 0.0
-		if len(usersWithProducts) > 0 {
-			percentage = (float64(count) / float64(len(usersWithProducts))) * 100
+		if totalUsersWithProducts > 0 {
+			percentage = float64(count) / float64(totalUsersWithProducts) * 100
 		}
-
-		productDistribution[product.ProductName] = ProductDistributionData{
+		productDistribution[productName] = ProductDistributionData{
 			Count:      count,
 			Percentage: percentage,
 		}
@@ -572,7 +639,6 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 	// Calculate total volumes
 	totalPersonalVolume := 0.0
 	totalTeamVolume := 0.0
-
 	for _, user := range users {
 		totalPersonalVolume += user.PersonalVolume
 		totalTeamVolume += user.TeamVolume
@@ -594,5 +660,325 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 		TotalTeamVolume:     totalTeamVolume,
 		AverageTeamVolume:   averageTeamVolume,
 		LegVolumeSummary:    legVolumeSummary,
+	}
+}
+
+// generateVolumeCalculations generates detailed volume calculation breakdown
+func generateVolumeCalculations(users []SimulationUser, products []BusinessProduct, genealogyType string) VolumeCalculations {
+	log.Println("Generating volume calculations breakdown")
+
+	personalVolumeBreakdown := make(map[string]PersonalVolumeDetail)
+	teamVolumeBreakdown := make(map[string]TeamVolumeDetail)
+	legVolumeBreakdown := make(map[string]LegVolumeDetail)
+
+	// Generate personal volume breakdown
+	for _, user := range users {
+		personalDetail := PersonalVolumeDetail{
+			UserID:               user.ID,
+			UserName:             user.Name,
+			ProductID:            user.ProductID,
+			ProductName:          user.ProductName,
+			ProductPrice:         0.0,
+			CommissionableVolume: user.PersonalVolume,
+			Calculation:          fmt.Sprintf("Personal Volume = Commissionable Volume of purchased product = $%.2f", user.PersonalVolume),
+		}
+
+		// Find product details
+		if user.ProductID != nil {
+			for _, product := range products {
+				if product.ID == *user.ProductID {
+					personalDetail.ProductPrice = product.ProductPrice
+					break
+				}
+			}
+		}
+
+		personalVolumeBreakdown[user.ID] = personalDetail
+	}
+
+	// Generate team volume breakdown
+	for _, user := range users {
+		directDownline := user.Children
+		totalDownline := countTotalDownline(user.ID, users)
+		downlineVolumes := make(map[string]float64)
+		volumeBreakdown := make(map[string]VolumeBreakdown)
+
+		// Calculate downline volumes by level
+		for _, childID := range user.Children {
+			childVolume := calculateDownlineVolumeByLevel(childID, users, 1)
+			downlineVolumes[childID] = childVolume
+		}
+
+		// Generate level breakdown
+		levelBreakdown := calculateLevelBreakdown(user.ID, users)
+		for level, data := range levelBreakdown {
+			volumeBreakdown[fmt.Sprintf("level_%d", level)] = VolumeBreakdown{
+				Level:  data.Level,
+				Users:  data.Users,
+				Volume: data.Volume,
+			}
+		}
+
+		teamDetail := TeamVolumeDetail{
+			UserID:          user.ID,
+			UserName:        user.Name,
+			DirectDownline:  directDownline,
+			TotalDownline:   totalDownline,
+			DownlineVolumes: downlineVolumes,
+			Calculation:     fmt.Sprintf("Team Volume = Sum of all downline Personal Volumes = $%.2f", user.TeamVolume),
+			VolumeBreakdown: volumeBreakdown,
+		}
+
+		teamVolumeBreakdown[user.ID] = teamDetail
+	}
+
+	// Generate leg volume breakdown
+	for _, user := range users {
+		legStructure := make(map[string]LegStructure)
+
+		for legKey, legVolume := range user.TeamLegVolumes {
+			directChildren := getDirectChildrenForLeg(user.ID, users, legKey, genealogyType)
+			totalUsers := countUsersInLeg(user.ID, users, legKey, genealogyType)
+			levelBreakdown := calculateLegLevelBreakdown(user.ID, users, legKey, genealogyType)
+
+			legStructure[legKey] = LegStructure{
+				LegKey:         legKey,
+				DirectChildren: directChildren,
+				TotalUsers:     totalUsers,
+				TotalVolume:    legVolume,
+				LevelBreakdown: levelBreakdown,
+			}
+		}
+
+		legDetail := LegVolumeDetail{
+			UserID:       user.ID,
+			UserName:     user.Name,
+			LegStructure: legStructure,
+			Calculation:  fmt.Sprintf("Leg Volume = Sum of Personal Volumes in specific leg = %v", user.TeamLegVolumes),
+		}
+
+		legVolumeBreakdown[user.ID] = legDetail
+	}
+
+	// Generate calculation methodology
+	methodology := fmt.Sprintf(`
+		Volume Calculation Methodology for %s Genealogy:
+		
+		1. Personal Volume: Commissionable Volume of products purchased by each user
+		2. Team Volume: Sum of Personal Volumes from all downline users (unlimited genealogy levels)
+		3. Leg Volume: Sum of Personal Volumes from users in specific legs (left/right for binary, leg-1/leg-2/etc for unilevel/matrix)
+		
+		All calculations are performed recursively through the genealogy tree structure.
+	`, genealogyType)
+
+	return VolumeCalculations{
+		PersonalVolumeBreakdown: personalVolumeBreakdown,
+		TeamVolumeBreakdown:     teamVolumeBreakdown,
+		LegVolumeBreakdown:      legVolumeBreakdown,
+		CalculationMethodology:  methodology,
+	}
+}
+
+// Helper functions for volume calculations
+func countTotalDownline(userID string, users []SimulationUser) int {
+	count := 0
+	for _, user := range users {
+		if user.ID == userID {
+			for _, childID := range user.Children {
+				count += 1 + countTotalDownline(childID, users)
+			}
+			break
+		}
+	}
+	return count
+}
+
+func calculateDownlineVolumeByLevel(userID string, users []SimulationUser, level int) float64 {
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil {
+		return 0
+	}
+
+	volume := user.PersonalVolume
+	for _, childID := range user.Children {
+		volume += calculateDownlineVolumeByLevel(childID, users, level+1)
+	}
+
+	return volume
+}
+
+func calculateLevelBreakdown(userID string, users []SimulationUser) map[int]LevelData {
+	levelData := make(map[int]LevelData)
+	calculateLevelBreakdownRecursive(userID, users, 1, levelData)
+	return levelData
+}
+
+func calculateLevelBreakdownRecursive(userID string, users []SimulationUser, level int, levelData map[int]LevelData) {
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil {
+		return
+	}
+
+	// Initialize level data if not exists
+	if _, exists := levelData[level]; !exists {
+		levelData[level] = LevelData{
+			Level:  level,
+			Users:  0,
+			Volume: 0,
+		}
+	}
+
+	// Update level data
+	levelInfo := levelData[level]
+	levelInfo.Users++
+	levelInfo.Volume += user.PersonalVolume
+	levelData[level] = levelInfo
+
+	// Process children
+	for _, childID := range user.Children {
+		calculateLevelBreakdownRecursive(childID, users, level+1, levelData)
+	}
+}
+
+func getDirectChildrenForLeg(userID string, users []SimulationUser, legKey string, genealogyType string) []string {
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil {
+		return []string{}
+	}
+
+	var legChildren []string
+	for i, childID := range user.Children {
+		var currentLegKey string
+		switch genealogyType {
+		case "binary":
+			if i == 0 {
+				currentLegKey = "left"
+			} else {
+				currentLegKey = "right"
+			}
+		case "unilevel", "matrix":
+			currentLegKey = fmt.Sprintf("leg-%d", i+1)
+		}
+
+		if currentLegKey == legKey {
+			legChildren = append(legChildren, childID)
+		}
+	}
+
+	return legChildren
+}
+
+func countUsersInLeg(userID string, users []SimulationUser, legKey string, genealogyType string) int {
+	count := 0
+	countUsersInLegRecursive(userID, users, legKey, genealogyType, &count)
+	return count
+}
+
+func countUsersInLegRecursive(userID string, users []SimulationUser, legKey string, genealogyType string, count *int) {
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil {
+		return
+	}
+
+	*count++
+
+	for i, childID := range user.Children {
+		var currentLegKey string
+		switch genealogyType {
+		case "binary":
+			if i == 0 {
+				currentLegKey = "left"
+			} else {
+				currentLegKey = "right"
+			}
+		case "unilevel", "matrix":
+			currentLegKey = fmt.Sprintf("leg-%d", i+1)
+		}
+
+		if currentLegKey == legKey {
+			countUsersInLegRecursive(childID, users, legKey, genealogyType, count)
+		}
+	}
+}
+
+func calculateLegLevelBreakdown(userID string, users []SimulationUser, legKey string, genealogyType string) map[int]LevelData {
+	levelData := make(map[int]LevelData)
+	calculateLegLevelBreakdownRecursive(userID, users, legKey, genealogyType, 1, levelData)
+	return levelData
+}
+
+func calculateLegLevelBreakdownRecursive(userID string, users []SimulationUser, legKey string, genealogyType string, level int, levelData map[int]LevelData) {
+	var user *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			user = &users[i]
+			break
+		}
+	}
+
+	if user == nil {
+		return
+	}
+
+	// Initialize level data if not exists
+	if _, exists := levelData[level]; !exists {
+		levelData[level] = LevelData{
+			Level:  level,
+			Users:  0,
+			Volume: 0,
+		}
+	}
+
+	// Update level data
+	levelInfo := levelData[level]
+	levelInfo.Users++
+	levelInfo.Volume += user.PersonalVolume
+	levelData[level] = levelInfo
+
+	// Process children in this leg
+	for i, childID := range user.Children {
+		var currentLegKey string
+		switch genealogyType {
+		case "binary":
+			if i == 0 {
+				currentLegKey = "left"
+			} else {
+				currentLegKey = "right"
+			}
+		case "unilevel", "matrix":
+			currentLegKey = fmt.Sprintf("leg-%d", i+1)
+		}
+
+		if currentLegKey == legKey {
+			calculateLegLevelBreakdownRecursive(childID, users, legKey, genealogyType, level+1, levelData)
+		}
 	}
 }
