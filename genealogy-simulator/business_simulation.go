@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -99,7 +100,39 @@ type VolumeCalculations struct {
 	PersonalVolumeBreakdown map[string]PersonalVolumeDetail `json:"personal_volume_breakdown"`
 	TeamVolumeBreakdown     map[string]TeamVolumeDetail     `json:"team_volume_breakdown"`
 	LegVolumeBreakdown      map[string]LegVolumeDetail      `json:"leg_volume_breakdown"`
+	VolumeByPayoutCycle     map[int]PayoutCycleVolume       `json:"volume_by_payout_cycle"`
 	CalculationMethodology  string                          `json:"calculation_methodology"`
+}
+
+// PayoutCycleVolume shows volume breakdown by payout cycle
+type PayoutCycleVolume struct {
+	CycleNumber         int                                 `json:"cycle_number"`
+	UsersGenerated      int                                 `json:"users_generated"`
+	PersonalVolume      float64                             `json:"personal_volume"`
+	TeamVolume          float64                             `json:"team_volume"`
+	LegVolumes          map[string]float64                  `json:"leg_volumes"`
+	ProductDistribution map[string]ProductCycleDistribution `json:"product_distribution"`
+	LevelBreakdown      map[int]LevelVolumeData             `json:"level_breakdown"`
+	CycleSummary        string                              `json:"cycle_summary"`
+}
+
+// ProductCycleDistribution shows product distribution within a cycle
+type ProductCycleDistribution struct {
+	ProductName          string  `json:"product_name"`
+	UsersCount           int     `json:"users_count"`
+	TotalVolume          float64 `json:"total_volume"`
+	Percentage           float64 `json:"percentage"`
+	AverageVolumePerUser float64 `json:"average_volume_per_user"`
+}
+
+// LevelVolumeData shows volume data for each level within a cycle
+type LevelVolumeData struct {
+	Level         int     `json:"level"`
+	UsersCount    int     `json:"users_count"`
+	TotalVolume   float64 `json:"total_volume"`
+	AverageVolume float64 `json:"average_volume"`
+	MaxVolume     float64 `json:"max_volume"`
+	MinVolume     float64 `json:"min_volume"`
 }
 
 // PersonalVolumeDetail shows how personal volume was calculated for each user
@@ -670,6 +703,7 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 	personalVolumeBreakdown := make(map[string]PersonalVolumeDetail)
 	teamVolumeBreakdown := make(map[string]TeamVolumeDetail)
 	legVolumeBreakdown := make(map[string]LegVolumeDetail)
+	volumeByPayoutCycle := make(map[int]PayoutCycleVolume)
 
 	// Generate personal volume breakdown
 	for _, user := range users {
@@ -760,6 +794,9 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 		legVolumeBreakdown[user.ID] = legDetail
 	}
 
+	// Generate volume breakdown by payout cycle
+	volumeByPayoutCycle = generateVolumeByPayoutCycle(users, products, genealogyType)
+
 	// Generate calculation methodology
 	methodology := fmt.Sprintf(`
 		Volume Calculation Methodology for %s Genealogy:
@@ -767,16 +804,216 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 		1. Personal Volume: Commissionable Volume of products purchased by each user
 		2. Team Volume: Sum of Personal Volumes from all downline users (unlimited genealogy levels)
 		3. Leg Volume: Sum of Personal Volumes from users in specific legs (left/right for binary, leg-1/leg-2/etc for unilevel/matrix)
+		4. Payout Cycle Volume: Volume breakdown by payout cycle showing temporal distribution
 		
 		All calculations are performed recursively through the genealogy tree structure.
+		Payout cycle analysis shows how business activity develops over time.
 	`, genealogyType)
 
 	return VolumeCalculations{
 		PersonalVolumeBreakdown: personalVolumeBreakdown,
 		TeamVolumeBreakdown:     teamVolumeBreakdown,
 		LegVolumeBreakdown:      legVolumeBreakdown,
+		VolumeByPayoutCycle:     volumeByPayoutCycle,
 		CalculationMethodology:  methodology,
 	}
+}
+
+// generateVolumeByPayoutCycle generates volume breakdown by payout cycle
+func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProduct, genealogyType string) map[int]PayoutCycleVolume {
+	cycleVolumes := make(map[int]PayoutCycleVolume)
+
+	// Group users by payout cycle
+	usersByCycle := make(map[int][]SimulationUser)
+	for _, user := range users {
+		cycle := user.PayoutCycle
+		if cycle > 0 {
+			usersByCycle[cycle] = append(usersByCycle[cycle], user)
+		}
+	}
+
+	// Calculate volumes for each cycle
+	for cycleNumber, cycleUsers := range usersByCycle {
+		// Calculate personal volume for this cycle
+		personalVolume := 0.0
+		for _, user := range cycleUsers {
+			personalVolume += user.PersonalVolume
+		}
+
+		// Calculate team volume for this cycle (only for users in this cycle)
+		teamVolume := 0.0
+		for _, user := range cycleUsers {
+			teamVolume += user.TeamVolume
+		}
+
+		// Calculate leg volumes for this cycle
+		legVolumes := make(map[string]float64)
+		legKeys := getLegKeys(genealogyType)
+		for _, legKey := range legKeys {
+			legVolumes[legKey] = 0.0
+		}
+
+		// Calculate leg volumes for users in this cycle
+		for _, user := range cycleUsers {
+			for legKey, legVolume := range user.TeamLegVolumes {
+				if _, exists := legVolumes[legKey]; exists {
+					legVolumes[legKey] += legVolume
+				}
+			}
+		}
+
+		// Calculate product distribution for this cycle
+		productDistribution := calculateProductDistributionForCycle(cycleUsers, products)
+
+		// Calculate level breakdown for this cycle
+		levelBreakdown := calculateLevelBreakdownForCycle(cycleUsers)
+
+		// Generate cycle summary
+		cycleSummary := fmt.Sprintf(
+			"Cycle %d: %d users generated, $%.2f personal volume, $%.2f team volume. "+
+				"Products: %s. Leg performance: %s",
+			cycleNumber,
+			len(cycleUsers),
+			personalVolume,
+			teamVolume,
+			formatProductSummary(productDistribution),
+			formatLegSummary(legVolumes),
+		)
+
+		cycleVolumes[cycleNumber] = PayoutCycleVolume{
+			CycleNumber:         cycleNumber,
+			UsersGenerated:      len(cycleUsers),
+			PersonalVolume:      personalVolume,
+			TeamVolume:          teamVolume,
+			LegVolumes:          legVolumes,
+			ProductDistribution: productDistribution,
+			LevelBreakdown:      levelBreakdown,
+			CycleSummary:        cycleSummary,
+		}
+	}
+
+	return cycleVolumes
+}
+
+// calculateProductDistributionForCycle calculates product distribution within a specific cycle
+func calculateProductDistributionForCycle(users []SimulationUser, products []BusinessProduct) map[string]ProductCycleDistribution {
+	productStats := make(map[string]ProductCycleDistribution)
+
+	// Initialize product stats
+	for _, product := range products {
+		productStats[product.ProductName] = ProductCycleDistribution{
+			ProductName:          product.ProductName,
+			UsersCount:           0,
+			TotalVolume:          0.0,
+			Percentage:           0.0,
+			AverageVolumePerUser: 0.0,
+		}
+	}
+
+	// Count users and volumes for each product
+	totalUsers := len(users)
+	for _, user := range users {
+		if user.ProductName != nil {
+			if stats, exists := productStats[*user.ProductName]; exists {
+				stats.UsersCount++
+				stats.TotalVolume += user.PersonalVolume
+				productStats[*user.ProductName] = stats
+			}
+		}
+	}
+
+	// Calculate percentages and averages
+	for productName, stats := range productStats {
+		if totalUsers > 0 {
+			stats.Percentage = float64(stats.UsersCount) / float64(totalUsers) * 100
+		}
+		if stats.UsersCount > 0 {
+			stats.AverageVolumePerUser = stats.TotalVolume / float64(stats.UsersCount)
+		}
+		productStats[productName] = stats
+	}
+
+	return productStats
+}
+
+// calculateLevelBreakdownForCycle calculates level breakdown within a specific cycle
+func calculateLevelBreakdownForCycle(users []SimulationUser) map[int]LevelVolumeData {
+	levelData := make(map[int]LevelVolumeData)
+
+	// Group users by level
+	for _, user := range users {
+		level := user.Level
+		if _, exists := levelData[level]; !exists {
+			levelData[level] = LevelVolumeData{
+				Level:         level,
+				UsersCount:    0,
+				TotalVolume:   0.0,
+				AverageVolume: 0.0,
+				MaxVolume:     0.0,
+				MinVolume:     0.0,
+			}
+		}
+
+		levelInfo := levelData[level]
+		levelInfo.UsersCount++
+		levelInfo.TotalVolume += user.PersonalVolume
+
+		if user.PersonalVolume > levelInfo.MaxVolume {
+			levelInfo.MaxVolume = user.PersonalVolume
+		}
+
+		if levelInfo.MinVolume == 0 || user.PersonalVolume < levelInfo.MinVolume {
+			levelInfo.MinVolume = user.PersonalVolume
+		}
+
+		levelData[level] = levelInfo
+	}
+
+	// Calculate averages
+	for level, data := range levelData {
+		if data.UsersCount > 0 {
+			data.AverageVolume = data.TotalVolume / float64(data.UsersCount)
+			levelData[level] = data
+		}
+	}
+
+	return levelData
+}
+
+// getLegKeys returns the leg keys for a given genealogy type
+func getLegKeys(genealogyType string) []string {
+	switch genealogyType {
+	case "binary":
+		return []string{"left", "right"}
+	case "unilevel", "matrix":
+		return []string{"leg-1", "leg-2", "leg-3", "leg-4", "leg-5"}
+	default:
+		return []string{}
+	}
+}
+
+// formatProductSummary formats product distribution for cycle summary
+func formatProductSummary(productDistribution map[string]ProductCycleDistribution) string {
+	var summaries []string
+	for productName, stats := range productDistribution {
+		if stats.UsersCount > 0 {
+			summary := fmt.Sprintf("%s(%d users, $%.2f)", productName, stats.UsersCount, stats.TotalVolume)
+			summaries = append(summaries, summary)
+		}
+	}
+	return strings.Join(summaries, ", ")
+}
+
+// formatLegSummary formats leg volumes for cycle summary
+func formatLegSummary(legVolumes map[string]float64) string {
+	var summaries []string
+	for legKey, volume := range legVolumes {
+		if volume > 0 {
+			summary := fmt.Sprintf("%s: $%.2f", legKey, volume)
+			summaries = append(summaries, summary)
+		}
+	}
+	return strings.Join(summaries, ", ")
 }
 
 // Helper functions for volume calculations

@@ -16,7 +16,8 @@ import {
   Table,
   Download,
   Filter,
-  Search
+  Search,
+  Calendar
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -60,8 +61,43 @@ interface SimulationResult {
   users: SimulationUser[]
   genealogy_structure: Record<string, string[]>
   simulation_summary: SimulationSummary
+  volume_calculations: {
+    personal_volume_breakdown: Record<string, any>
+    team_volume_breakdown: Record<string, any>
+    leg_volume_breakdown: Record<string, any>
+    volume_by_payout_cycle: Record<string, PayoutCycleVolumeData>
+    calculation_methodology: string
+  }
   created_at: string
   updated_at: string
+}
+
+interface PayoutCycleVolumeData {
+  cycle_number: number
+  users_generated: number
+  personal_volume: number
+  team_volume: number
+  leg_volumes: Record<string, number>
+  product_distribution: Record<string, ProductCycleDistributionData>
+  level_breakdown: Record<string, LevelVolumeData>
+  cycle_summary: string
+}
+
+interface ProductCycleDistributionData {
+  product_name: string
+  users_count: number
+  total_volume: number
+  percentage: number
+  average_volume_per_user: number
+}
+
+interface LevelVolumeData {
+  level: number
+  users_count: number
+  total_volume: number
+  average_volume: number
+  max_volume: number
+  min_volume: number
 }
 
 interface SimulationReportProps {
@@ -385,6 +421,142 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Payout Cycle Volume Breakdown */}
+      {simulationResult.volume_calculations?.volume_by_payout_cycle && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Calendar className="w-5 h-5 mr-2" />
+              Payout Cycle Volume Breakdown
+            </CardTitle>
+            <CardDescription>
+              Detailed volume analysis by payout cycle showing temporal distribution of business activity
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {Object.entries(simulationResult.volume_calculations.volume_by_payout_cycle)
+                .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                .map(([cycleNumber, cycleData]) => (
+                  <div key={cycleNumber} className="border rounded-lg p-4 bg-gray-50">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Payout Cycle {cycleNumber}
+                      </h3>
+                      <Badge variant="outline" className="text-sm">
+                        {cycleData.users_generated} users
+                      </Badge>
+                    </div>
+
+                    {/* Cycle Summary */}
+                    <div className="mb-4 p-3 bg-white rounded border">
+                      <p className="text-sm text-gray-700">{cycleData.cycle_summary}</p>
+                    </div>
+
+                    {/* Volume Overview */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="text-center p-3 bg-green-50 rounded-lg border">
+                        <div className="text-lg font-bold text-green-800">
+                          ${cycleData.personal_volume.toLocaleString()}
+                        </div>
+                        <div className="text-sm text-green-600">Personal Volume</div>
+                      </div>
+                      
+                      <div className="text-center p-3 bg-blue-50 rounded-lg border">
+                        <div className="text-lg font-bold text-blue-800">
+                          ${cycleData.team_volume.toLocaleString()}
+                        </div>
+                        <div className="text-sm text-blue-600">Team Volume</div>
+                      </div>
+                      
+                      <div className="text-center p-3 bg-purple-50 rounded-lg border">
+                        <div className="text-sm text-purple-600">Leg Volumes</div>
+                        <div className="text-xs text-purple-500 mt-1">
+                          {Object.entries(cycleData.leg_volumes || {}).map(([leg, volume]) => (
+                            <div key={leg}>
+                              {leg}: ${volume.toLocaleString()}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Product Distribution for this Cycle */}
+                    {cycleData.product_distribution && Object.keys(cycleData.product_distribution).length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="font-medium text-gray-900 mb-3">Product Distribution in Cycle {cycleNumber}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {Object.entries(cycleData.product_distribution).map(([productName, productData]) => (
+                            <div key={productName} className="p-3 bg-white rounded border">
+                              <div className="font-medium text-gray-800 mb-2">{productName}</div>
+                              <div className="space-y-1 text-sm">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Users:</span>
+                                  <span className="font-medium">{productData.users_count}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Total Volume:</span>
+                                  <span className="font-medium">${productData.total_volume.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Percentage:</span>
+                                  <span className="font-medium">{productData.percentage.toFixed(1)}%</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-600">Avg/User:</span>
+                                  <span className="font-medium">${productData.average_volume_per_user.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Level Breakdown for this Cycle */}
+                    {cycleData.level_breakdown && Object.keys(cycleData.level_breakdown).length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">Level Breakdown in Cycle {cycleNumber}</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          {Object.entries(cycleData.level_breakdown)
+                            .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                            .map(([level, levelData]) => (
+                              <div key={level} className="p-3 bg-white rounded border">
+                                <div className="font-medium text-gray-800 mb-2">Level {level}</div>
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Users:</span>
+                                    <span className="font-medium">{levelData.users_count}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Total:</span>
+                                    <span className="font-medium">${levelData.total_volume.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Average:</span>
+                                    <span className="font-medium">${levelData.average_volume.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Max:</span>
+                                    <span className="font-medium">${levelData.max_volume.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Min:</span>
+                                    <span className="font-medium">${levelData.min_volume.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tab Navigation */}
       <Card>
