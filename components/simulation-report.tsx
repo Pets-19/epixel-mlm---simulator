@@ -100,6 +100,53 @@ interface LevelVolumeData {
   min_volume: number
 }
 
+interface PersonalVolumeDetailData {
+  user_id: string
+  user_name: string
+  product_id?: number
+  product_name?: string
+  product_price: number
+  commissionable_volume: number
+  calculation: string
+}
+
+interface TeamVolumeDetailData {
+  user_id: string
+  user_name: string
+  direct_downline: string[]
+  total_downline: number
+  downline_volumes: Record<string, number>
+  calculation: string
+  volume_breakdown: Record<string, VolumeBreakdownData>
+}
+
+interface VolumeBreakdownData {
+  level: number
+  users: number
+  volume: number
+}
+
+interface LegVolumeDetailData {
+  user_id: string
+  user_name: string
+  leg_structure: Record<string, LegStructureData>
+  calculation: string
+}
+
+interface LegStructureData {
+  leg_key: string
+  direct_children: string[]
+  total_users: number
+  total_volume: number
+  level_breakdown: Record<string, LevelData>
+}
+
+interface LevelData {
+  level: number
+  users: number
+  volume: number
+}
+
 interface SimulationReportProps {
   simulationResult: SimulationResult
 }
@@ -111,9 +158,10 @@ interface TreeNodeProps {
   genealogyType: string
   expandedNodes: Set<string>
   onToggleNode: (nodeId: string) => void
+  simulationResult: SimulationResult
 }
 
-const TreeNode = ({ user, users, level, genealogyType, expandedNodes, onToggleNode }: TreeNodeProps) => {
+const TreeNode = ({ user, users, level, genealogyType, expandedNodes, onToggleNode, simulationResult }: TreeNodeProps) => {
   const isExpanded = expandedNodes.has(user.id)
   const hasChildren = user.children.length > 0
   const indent = level * 20
@@ -128,6 +176,25 @@ const TreeNode = ({ user, users, level, genealogyType, expandedNodes, onToggleNo
   const getLegVolume = (legKey: string) => {
     return user.team_leg_volumes[legKey] || 0
   }
+
+  // Get user's payout cycle volume data
+  const getUserCycleData = () => {
+    if (!user.payout_cycle) return null
+    
+    // Find the user in the volume calculations
+    const personalBreakdown = simulationResult.volume_calculations?.personal_volume_breakdown?.[user.id]
+    const teamBreakdown = simulationResult.volume_calculations?.team_volume_breakdown?.[user.id]
+    const legBreakdown = simulationResult.volume_calculations?.leg_volume_breakdown?.[user.id]
+    
+    return {
+      personal: personalBreakdown,
+      team: teamBreakdown,
+      leg: legBreakdown,
+      cycle: user.payout_cycle
+    }
+  }
+
+  const userCycleData = getUserCycleData()
 
   return (
     <div className="mb-2">
@@ -160,6 +227,9 @@ const TreeNode = ({ user, users, level, genealogyType, expandedNodes, onToggleNo
                     {getLegLabel(user.genealogy_position, genealogyType)}
                   </Badge>
                 )}
+                <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800">
+                  Cycle {user.payout_cycle}
+                </Badge>
               </div>
             </div>
             
@@ -206,6 +276,99 @@ const TreeNode = ({ user, users, level, genealogyType, expandedNodes, onToggleNo
               </div>
             </div>
           )}
+
+          {/* User Cycle Volume Details */}
+          {isExpanded && userCycleData && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <h5 className="text-sm font-medium text-blue-800 mb-2">
+                  Payout Cycle {userCycleData.cycle} Volume Breakdown
+                </h5>
+                
+                {/* Personal Volume Details */}
+                {userCycleData.personal && (
+                  <div className="mb-3">
+                    <h6 className="text-xs font-medium text-blue-700 mb-1">Personal Volume Calculation</h6>
+                    <div className="text-xs text-blue-600 bg-white p-2 rounded border">
+                      {userCycleData.personal.calculation}
+                    </div>
+                  </div>
+                )}
+
+                {/* Team Volume Details */}
+                {userCycleData.team && (
+                  <div className="mb-3">
+                    <h6 className="text-xs font-medium text-blue-700 mb-1">Team Volume Calculation</h6>
+                    <div className="text-xs text-blue-600 bg-white p-2 rounded border">
+                      {userCycleData.team.calculation}
+                    </div>
+                    
+                                         {/* Direct Downline */}
+                     {userCycleData.team.direct_downline && userCycleData.team.direct_downline.length > 0 && (
+                       <div className="mt-2">
+                         <div className="text-xs text-blue-700 mb-1">Direct Downline ({userCycleData.team.direct_downline.length} users)</div>
+                         <div className="flex flex-wrap gap-1">
+                           {userCycleData.team.direct_downline.map((downlineId: string, index: number) => {
+                             const downlineUser = users.find(u => u.id === downlineId)
+                             return (
+                               <Badge key={downlineId} variant="outline" className="text-xs">
+                                 {downlineUser?.name || downlineId} (${userCycleData.team.downline_volumes?.[downlineId]?.toLocaleString() || 0})
+                               </Badge>
+                             )
+                           })}
+                         </div>
+                       </div>
+                     )}
+
+                     {/* Level Breakdown */}
+                     {userCycleData.team.volume_breakdown && Object.keys(userCycleData.team.volume_breakdown).length > 0 && (
+                       <div className="mt-2">
+                         <div className="text-xs text-blue-700 mb-1">Volume by Level</div>
+                         <div className="grid grid-cols-3 gap-2">
+                           {Object.entries(userCycleData.team.volume_breakdown).map(([levelKey, levelData]) => {
+                             const typedLevelData = levelData as VolumeBreakdownData
+                             return (
+                               <div key={levelKey} className="text-center p-1 bg-white rounded border text-xs">
+                                 <div className="font-medium text-blue-600">Level {typedLevelData.level}</div>
+                                 <div className="text-blue-500">{typedLevelData.users} users</div>
+                                 <div className="text-blue-600 font-bold">${typedLevelData.volume.toLocaleString()}</div>
+                               </div>
+                             )
+                           })}
+                         </div>
+                       </div>
+                     )}
+                  </div>
+                )}
+
+                                 {/* Leg Volume Details */}
+                 {userCycleData.leg && userCycleData.leg.leg_structure && (
+                   <div>
+                     <h6 className="text-xs font-medium text-blue-700 mb-1">Leg Volume Structure</h6>
+                     <div className="grid grid-cols-2 gap-2">
+                       {Object.entries(userCycleData.leg.leg_structure).map(([legKey, legData]) => {
+                         const typedLegData = legData as LegStructureData
+                         return (
+                           <div key={legKey} className="bg-white p-2 rounded border">
+                             <div className="text-xs font-medium text-blue-600 mb-1">
+                               {getLegLabel(legKey, genealogyType)}
+                             </div>
+                             <div className="text-xs text-blue-500 space-y-1">
+                               <div>Users: {typedLegData.total_users}</div>
+                               <div>Volume: ${typedLegData.total_volume.toLocaleString()}</div>
+                               {typedLegData.direct_children && typedLegData.direct_children.length > 0 && (
+                                 <div>Direct: {typedLegData.direct_children.length}</div>
+                               )}
+                             </div>
+                           </div>
+                         )
+                       })}
+                     </div>
+                   </div>
+                 )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
@@ -224,6 +387,7 @@ const TreeNode = ({ user, users, level, genealogyType, expandedNodes, onToggleNo
                   genealogyType={genealogyType}
                   expandedNodes={expandedNodes}
                   onToggleNode={onToggleNode}
+                  simulationResult={simulationResult}
                 />
               )
             }
@@ -323,6 +487,23 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
   }
 
   const explanation = getVolumeCalculationExplanation()
+
+  // Helper function to get user cycle data
+  const getUserCycleData = (user: SimulationUser) => {
+    if (!user.payout_cycle) return null
+    
+    // Find the user in the volume calculations
+    const personalBreakdown = simulationResult.volume_calculations?.personal_volume_breakdown?.[user.id]
+    const teamBreakdown = simulationResult.volume_calculations?.team_volume_breakdown?.[user.id]
+    const legBreakdown = simulationResult.volume_calculations?.leg_volume_breakdown?.[user.id]
+    
+    return {
+      personal: personalBreakdown,
+      team: teamBreakdown,
+      leg: legBreakdown,
+      cycle: user.payout_cycle
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -646,6 +827,7 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
                     genealogyType={simulationResult.genealogy_type}
                     expandedNodes={expandedNodes}
                     onToggleNode={toggleNode}
+                    simulationResult={simulationResult}
                   />
                 ))}
             </div>
@@ -686,6 +868,19 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
                       </th>
                       <th 
                         className="border border-gray-200 p-3 text-left cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort('payout_cycle')}
+                      >
+                        <div className="flex items-center">
+                          Payout Cycle
+                          {sortField === 'payout_cycle' && (
+                            <span className="ml-1">
+                              {sortDirection === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                      <th 
+                        className="border border-gray-200 p-3 text-left cursor-pointer hover:bg-gray-100"
                         onClick={() => handleSort('personal_volume')}
                       >
                         <div className="flex items-center">
@@ -703,57 +898,90 @@ const SimulationReport = ({ simulationResult }: SimulationReportProps) => {
                       >
                         <div className="flex items-center">
                           Team Volume
-                          {sortField === 'team_volume' && (
-                            <span className="ml-1">
-                              {sortDirection === 'asc' ? '↑' : '↓'}
-                            </span>
-                          )}
+                          {sortDirection === 'asc' ? '↑' : '↓'}
                         </div>
                       </th>
                       <th className="border border-gray-200 p-3 text-left">Product</th>
                       <th className="border border-gray-200 p-3 text-left">Leg Volumes</th>
+                      <th className="border border-gray-200 p-3 text-left">Cycle Details</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedUsers.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="border border-gray-200 p-3">
-                          <div>
-                            <div className="font-medium">{user.name}</div>
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                          </div>
-                        </td>
-                        <td className="border border-gray-200 p-3">
-                          <Badge variant="outline">Level {user.level}</Badge>
-                        </td>
-                        <td className="border border-gray-200 p-3">
-                          <div className="font-medium text-green-600">
-                            ${user.personal_volume.toLocaleString()}
-                          </div>
-                        </td>
-                        <td className="border border-gray-200 p-3">
-                          <div className="font-medium text-blue-600">
-                            ${user.team_volume.toLocaleString()}
-                          </div>
-                        </td>
-                        <td className="border border-gray-200 p-3">
-                          {user.product_name ? (
-                            <Badge variant="secondary">{user.product_name}</Badge>
-                          ) : (
-                            <span className="text-gray-400">No product</span>
-                          )}
-                        </td>
-                        <td className="border border-gray-200 p-3">
-                          <div className="space-y-1">
-                            {Object.entries(user.team_leg_volumes).map(([leg, volume]) => (
-                              <div key={leg} className="text-xs">
-                                <span className="font-medium">{leg}:</span> ${volume.toLocaleString()}
+                    {paginatedUsers.map((user) => {
+                      const userCycleData = getUserCycleData(user)
+                      return (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                          <td className="border border-gray-200 p-3">
+                            <div>
+                              <div className="font-medium">{user.name}</div>
+                              <div className="text-sm text-gray-500">{user.email}</div>
+                            </div>
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            <Badge variant="outline">Level {user.level}</Badge>
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            <Badge variant="outline" className="bg-orange-100 text-orange-800">
+                              Cycle {user.payout_cycle}
+                            </Badge>
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            <div className="font-medium text-green-600">
+                              ${user.personal_volume.toLocaleString()}
+                            </div>
+                            {userCycleData?.personal && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {userCycleData.personal.calculation}
                               </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                            )}
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            <div className="font-medium text-blue-600">
+                              ${user.team_volume.toLocaleString()}
+                            </div>
+                            {userCycleData?.team && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {userCycleData.team.calculation}
+                              </div>
+                            )}
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            {user.product_name ? (
+                              <Badge variant="secondary">{user.product_name}</Badge>
+                            ) : (
+                              <span className="text-gray-400">No product</span>
+                            )}
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            <div className="space-y-1">
+                              {Object.entries(user.team_leg_volumes).map(([leg, volume]) => (
+                                <div key={leg} className="text-xs">
+                                  <span className="font-medium">{leg}:</span> ${volume.toLocaleString()}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="border border-gray-200 p-3">
+                            {userCycleData ? (
+                              <div className="text-xs space-y-1">
+                                <div className="font-medium text-blue-600">Cycle {userCycleData.cycle}</div>
+                                {userCycleData.team?.direct_downline && (
+                                  <div>Downline: {userCycleData.team.direct_downline.length} users</div>
+                                )}
+                                {userCycleData.team?.total_downline && (
+                                  <div>Total: {userCycleData.team.total_downline} users</div>
+                                )}
+                                {userCycleData.leg?.leg_structure && (
+                                  <div>Legs: {Object.keys(userCycleData.leg.leg_structure).length}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">No cycle data</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
