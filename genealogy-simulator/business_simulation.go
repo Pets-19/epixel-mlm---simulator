@@ -611,10 +611,34 @@ func calculateTeamVolumeWithCycleBreakdown(userID string, users []SimulationUser
 	cycleBreakdown := make(map[int]float64)
 	totalVolume := 0.0
 
-	// Recursively calculate team volume with cycle attribution
-	totalVolume, cycleBreakdown = calculateDownlineVolumeWithCycleAttribution(userID, users, 0)
+	// For root user (level 0), include their personal volume in team volume
+	if user.Level == 0 {
+		// Root user's personal volume goes to cycle 1 by default
+		cycleBreakdown[1] = user.PersonalVolume
+		totalVolume = user.PersonalVolume
+	}
 
-	calculation := fmt.Sprintf("Team Volume = Sum of all downline Personal Volumes at unlimited levels = $%.2f", totalVolume)
+	// Recursively calculate team volume with cycle attribution from all downline
+	downlineVolume, downlineCycleBreakdown := calculateDownlineVolumeWithCycleAttribution(userID, users, 0)
+	
+	// For non-root users, include their personal volume
+	if user.Level > 0 {
+		cycle := user.PayoutCycle
+		if cycle > 0 {
+			cycleBreakdown[cycle] += user.PersonalVolume
+			totalVolume += user.PersonalVolume
+		}
+	}
+	
+	// Add downline volumes
+	totalVolume += downlineVolume
+	
+	// Merge cycle breakdowns from downline
+	for cycle, volume := range downlineCycleBreakdown {
+		cycleBreakdown[cycle] += volume
+	}
+
+	calculation := fmt.Sprintf("Team Volume = Personal Volume + Sum of all downline Personal Volumes at unlimited levels = $%.2f", totalVolume)
 	if len(cycleBreakdown) > 0 {
 		cycleDetails := make([]string, 0)
 		for cycle, volume := range cycleBreakdown {
@@ -644,21 +668,18 @@ func calculateDownlineVolumeWithCycleAttribution(userID string, users []Simulati
 		return 0.0, make(map[int]float64)
 	}
 
-	totalVolume := user.PersonalVolume
+	totalVolume := 0.0  // Start with 0 for downline calculation
 	cycleBreakdown := make(map[int]float64)
 
-	// Add this user's volume to cycle breakdown
-	cycle := user.PayoutCycle
-	if cycle > 0 {
-		cycleBreakdown[cycle] += user.PersonalVolume
-	}
+	// For downline calculation, we don't include the current user's personal volume
+	// This function is used to calculate ONLY downline volumes, not total team volume
 
 	// Recursively calculate from all children (unlimited levels)
 	for _, childID := range user.Children {
 		childVolume, childCycleBreakdown := calculateDownlineVolumeWithCycleAttribution(childID, users, depth+1)
 		totalVolume += childVolume
 
-		// Merge cycle breakdowns
+		// Merge cycle breakdowns from all downline users
 		for cycle, volume := range childCycleBreakdown {
 			cycleBreakdown[cycle] += volume
 		}
