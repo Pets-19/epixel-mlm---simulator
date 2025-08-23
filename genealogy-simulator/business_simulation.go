@@ -22,11 +22,10 @@ type BusinessProduct struct {
 	IsActive          bool    `json:"is_active"`
 }
 
-// SimulationUser represents a user in the simulation with product assignment
+// SimulationUser represents a user in the business simulation
 type SimulationUser struct {
 	ID                   string             `json:"id"`
 	Name                 string             `json:"name"`
-	Email                string             `json:"email"`
 	Level                int                `json:"level"`
 	ParentID             *string            `json:"parent_id,omitempty"`
 	Children             []string           `json:"children"`
@@ -40,6 +39,11 @@ type SimulationUser struct {
 	PayoutCycle          int                `json:"payout_cycle"`
 	CreatedAt            time.Time          `json:"created_at"`
 	GenealogyNode        *GenealogyNode     `json:"genealogy_node,omitempty"`
+	// Enhanced cycle-specific volume tracking
+	PersonalVolumePerCycle   map[int]float64            `json:"personal_volume_per_cycle"`
+	LegVolumePerCycle        map[string]map[int]float64 `json:"leg_volume_per_cycle"`
+	TeamVolumePerCycle       map[int]float64            `json:"team_volume_per_cycle"`
+	VolumeGenerationPerCycle map[int]VolumeGeneration   `json:"volume_generation_per_cycle"`
 }
 
 // BusinessSimulationRequest represents the enhanced simulation request
@@ -148,9 +152,12 @@ type PersonalVolumeDetail struct {
 
 // Enhanced volume calculation with cycle attribution
 type VolumeWithCycleAttribution struct {
-	TotalVolume    float64         `json:"total_volume"`
-	CycleBreakdown map[int]float64 `json:"cycle_breakdown"`
-	Calculation    string          `json:"calculation"`
+	TotalVolume            float64                    `json:"total_volume"`
+	CycleBreakdown         map[int]float64            `json:"cycle_breakdown"`
+	PersonalVolumePerCycle map[int]float64            `json:"personal_volume_per_cycle"`
+	LegVolumePerCycle      map[string]map[int]float64 `json:"leg_volume_per_cycle"`
+	TeamVolumePerCycle     map[int]float64            `json:"team_volume_per_cycle"`
+	Calculation            string                     `json:"calculation"`
 }
 
 // Enhanced team volume detail with cycle attribution
@@ -196,6 +203,14 @@ type LevelData struct {
 	Level  int     `json:"level"`
 	Users  int     `json:"users"`
 	Volume float64 `json:"volume"`
+}
+
+// VolumeGeneration tracks volume generated in each cycle
+type VolumeGeneration struct {
+	PersonalVolume float64            `json:"personal_volume"`
+	LegVolumes     map[string]float64 `json:"leg_volumes"`
+	TeamVolume     float64            `json:"team_volume"`
+	Source         string             `json:"source"` // "enrollment", "purchase", "downline"
 }
 
 // handleBusinessSimulation handles the enhanced business simulation with products and volumes
@@ -344,7 +359,6 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 	for i, node := range simResponse.Nodes {
 		userID := fmt.Sprintf("user_%d", i+1)
 		userName := fmt.Sprintf("User %d", i+1)
-		userEmail := fmt.Sprintf("user%d@simulation.com", i+1)
 
 		var parentID *string
 		if node.ParentID != nil {
@@ -361,7 +375,6 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 		user := SimulationUser{
 			ID:                userID,
 			Name:              userName,
-			Email:             userEmail,
 			Level:             node.Depth,
 			ParentID:          parentID,
 			Children:          make([]string, 0),
@@ -370,6 +383,11 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 			CreatedAt:         node.CreatedAt,
 			GenealogyNode:     &node,
 			TeamLegVolumes:    make(map[string]float64),
+			// Initialize new fields
+			PersonalVolumePerCycle:   make(map[int]float64),
+			LegVolumePerCycle:        make(map[string]map[int]float64),
+			TeamVolumePerCycle:       make(map[int]float64),
+			VolumeGenerationPerCycle: make(map[int]VolumeGeneration),
 		}
 
 		users = append(users, user)
@@ -444,6 +462,17 @@ func assignProductsToUsers(users []SimulationUser, products []BusinessProduct) {
 		user.ProductName = &product.ProductName
 		user.CommissionableVolume = product.BusinessVolume
 		user.PersonalVolume = product.BusinessVolume
+
+		// Set personal volume per cycle (attributed to enrollment cycle)
+		user.PersonalVolumePerCycle[user.PayoutCycle] = product.BusinessVolume
+
+		// Initialize volume generation for this cycle
+		user.VolumeGenerationPerCycle[user.PayoutCycle] = VolumeGeneration{
+			PersonalVolume: product.BusinessVolume,
+			LegVolumes:     make(map[string]float64),
+			TeamVolume:     0.0, // Will be calculated later
+			Source:         "enrollment",
+		}
 	}
 
 	log.Printf("Assigned products to %d users", len(usersToAssign))
@@ -470,6 +499,31 @@ func calculateVolumes(users []SimulationUser, genealogyType string) {
 	log.Printf("Calculating volumes for %d users with cycle attribution", len(users))
 
 	// Personal volumes are already set during product assignment
+
+	// Initialize cycle-specific volume fields for all users
+	for i := range users {
+		// Initialize maps if they don't exist
+		if users[i].PersonalVolumePerCycle == nil {
+			users[i].PersonalVolumePerCycle = make(map[int]float64)
+		}
+		if users[i].LegVolumePerCycle == nil {
+			users[i].LegVolumePerCycle = make(map[string]map[int]float64)
+		}
+		if users[i].TeamVolumePerCycle == nil {
+			users[i].TeamVolumePerCycle = make(map[int]float64)
+		}
+		if users[i].VolumeGenerationPerCycle == nil {
+			users[i].VolumeGenerationPerCycle = make(map[int]VolumeGeneration)
+		}
+
+		// Initialize leg volume per cycle maps
+		legKeys := getLegKeys(genealogyType)
+		for _, legKey := range legKeys {
+			if users[i].LegVolumePerCycle[legKey] == nil {
+				users[i].LegVolumePerCycle[legKey] = make(map[int]float64)
+			}
+		}
+	}
 
 	// Calculate team volumes (unlimited genealogy levels) and leg-specific volumes with cycle attribution
 	for i := range users {
@@ -560,6 +614,17 @@ func calculateTeamLegVolumesWithCycleAttribution(userID string, users []Simulati
 
 		if legKey != "" {
 			legVolumes[legKey] = calculateLegVolumeWithCycleAttribution(childID, users, genealogyType)
+
+			// Calculate leg volume per cycle for this user
+			legVolumePerCycle := calculateLegVolumeWithCycleBreakdown(childID, users, genealogyType, legKey)
+			if user.LegVolumePerCycle[legKey] == nil {
+				user.LegVolumePerCycle[legKey] = make(map[int]float64)
+			}
+
+			// Distribute leg volume across cycles
+			for cycle, volume := range legVolumePerCycle.CycleBreakdown {
+				user.LegVolumePerCycle[legKey][cycle] += volume
+			}
 		}
 	}
 
@@ -612,6 +677,15 @@ func calculateTeamVolumeWithCycleBreakdown(userID string, users []SimulationUser
 	// So we get the complete volume breakdown directly
 	totalVolume, cycleBreakdown := calculateDownlineVolumeWithCycleAttribution(userID, users, 0)
 
+	// Get the user to access cycle-specific volume data
+	var currentUser *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			currentUser = &users[i]
+			break
+		}
+	}
+
 	calculation := fmt.Sprintf("Team Volume = Personal Volume + Sum of all downline Personal Volumes at unlimited levels = $%.2f", totalVolume)
 	if len(cycleBreakdown) > 0 {
 		cycleDetails := make([]string, 0)
@@ -622,9 +696,12 @@ func calculateTeamVolumeWithCycleBreakdown(userID string, users []SimulationUser
 	}
 
 	return VolumeWithCycleAttribution{
-		TotalVolume:    totalVolume,
-		CycleBreakdown: cycleBreakdown,
-		Calculation:    calculation,
+		TotalVolume:            totalVolume,
+		CycleBreakdown:         cycleBreakdown,
+		PersonalVolumePerCycle: currentUser.PersonalVolumePerCycle,
+		LegVolumePerCycle:      currentUser.LegVolumePerCycle,
+		TeamVolumePerCycle:     currentUser.TeamVolumePerCycle,
+		Calculation:            calculation,
 	}
 }
 
@@ -645,13 +722,16 @@ func calculateDownlineVolumeWithCycleAttribution(userID string, users []Simulati
 	totalVolume := user.PersonalVolume // Include current user's personal volume
 	cycleBreakdown := make(map[int]float64)
 
-	// Add current user's personal volume to cycle breakdown
+	// Add current user's personal volume to cycle breakdown (attributed to enrollment cycle)
 	cycle := user.PayoutCycle
 	if cycle > 0 {
 		cycleBreakdown[cycle] += user.PersonalVolume
+		// Update user's cycle-specific team volume
+		user.TeamVolumePerCycle[cycle] = user.PersonalVolume
 	} else if depth == 0 {
-		// For root user (level 0), include their personal volume in cycle 1 by default
-		cycleBreakdown[1] += user.PersonalVolume
+		// For root user (level 0), don't artificially assign personal volume to cycle 1
+		// Instead, let the downline volume determine the cycle distribution
+		// The root user's team volume will be distributed across cycles where downline users are active
 	}
 
 	// Recursively calculate from all children (unlimited levels)
@@ -662,6 +742,30 @@ func calculateDownlineVolumeWithCycleAttribution(userID string, users []Simulati
 		// Merge cycle breakdowns from all downline users
 		for cycle, volume := range childCycleBreakdown {
 			cycleBreakdown[cycle] += volume
+			// Update user's cycle-specific team volume
+			user.TeamVolumePerCycle[cycle] += volume
+		}
+	}
+
+	// For root user (depth 0), if they have no personal volume but have downline volume,
+	// distribute their team volume across the cycles where downline users are active
+	if depth == 0 && user.PersonalVolume == 0 && len(cycleBreakdown) > 0 {
+		// Calculate total downline volume
+		totalDownlineVolume := 0.0
+		for _, volume := range cycleBreakdown {
+			totalDownlineVolume += volume
+		}
+
+		// Distribute the team volume proportionally across cycles
+		if totalDownlineVolume > 0 {
+			for cycle, volume := range cycleBreakdown {
+				// Calculate what percentage of total downline volume this cycle represents
+				cyclePercentage := volume / totalDownlineVolume
+				// Distribute the team volume proportionally
+				cycleBreakdown[cycle] = volume + (totalDownlineVolume * cyclePercentage)
+				// Update user's cycle-specific team volume
+				user.TeamVolumePerCycle[cycle] = cycleBreakdown[cycle]
+			}
 		}
 	}
 
@@ -719,6 +823,11 @@ func calculateLegVolumeWithCycleBreakdown(userID string, users []SimulationUser,
 	totalVolume := 0.0
 	cycleBreakdown := make(map[int]float64)
 
+	// Initialize leg volume per cycle for the current user
+	if user.LegVolumePerCycle[legKey] == nil {
+		user.LegVolumePerCycle[legKey] = make(map[int]float64)
+	}
+
 	for _, childID := range legChildren {
 		childVolume, childCycleBreakdown := calculateDownlineVolumeWithCycleAttribution(childID, users, 0)
 		totalVolume += childVolume
@@ -726,6 +835,8 @@ func calculateLegVolumeWithCycleBreakdown(userID string, users []SimulationUser,
 		// Merge cycle breakdowns
 		for cycle, volume := range childCycleBreakdown {
 			cycleBreakdown[cycle] += volume
+			// Update user's leg volume per cycle
+			user.LegVolumePerCycle[legKey][cycle] += volume
 		}
 	}
 
@@ -738,15 +849,27 @@ func calculateLegVolumeWithCycleBreakdown(userID string, users []SimulationUser,
 		calculation += fmt.Sprintf(" (Breakdown: %s)", strings.Join(cycleDetails, ", "))
 	}
 
+	// Get the user to access cycle-specific volume data
+	var currentUser *SimulationUser
+	for i := range users {
+		if users[i].ID == userID {
+			currentUser = &users[i]
+			break
+		}
+	}
+
 	return VolumeWithCycleAttribution{
-		TotalVolume:    totalVolume,
-		CycleBreakdown: cycleBreakdown,
-		Calculation:    calculation,
+		TotalVolume:            totalVolume,
+		CycleBreakdown:         cycleBreakdown,
+		PersonalVolumePerCycle: currentUser.PersonalVolumePerCycle,
+		LegVolumePerCycle:      currentUser.LegVolumePerCycle,
+		TeamVolumePerCycle:     currentUser.TeamVolumePerCycle,
+		Calculation:            calculation,
 	}
 }
 
-// calculateLegVolumeSummary calculates summary statistics for all legs
-func calculateLegVolumeSummary(users []SimulationUser) map[string]LegVolumeData {
+// calculateLegVolumeSummary calculates summary statistics for all legs with product analysis
+func calculateLegVolumeSummary(users []SimulationUser, products []BusinessProduct) map[string]LegVolumeData {
 	legSummary := make(map[string]LegVolumeData)
 
 	// Initialize leg data structures
@@ -789,6 +912,17 @@ func calculateLegVolumeSummary(users []SimulationUser) map[string]LegVolumeData 
 		}
 	}
 
+	// Enhanced analysis: Log product distribution impact on leg volumes
+	if len(products) > 0 {
+		log.Printf("Leg volume summary calculated for %d legs with %d product types", len(legSummary), len(products))
+		for legName, legData := range legSummary {
+			if legData.UserCount > 0 {
+				log.Printf("Leg %s: %d users, total volume: $%.2f, avg volume: $%.2f",
+					legName, legData.UserCount, legData.TotalVolume, legData.AverageVolume)
+			}
+		}
+	}
+
 	return legSummary
 }
 
@@ -799,10 +933,22 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 	usersPerCycle := make(map[int]int)
 	productDistribution := make(map[string]ProductDistributionData)
 
-	// Count users per cycle
+	// Count users per cycle and validate against expected cycles
 	for _, user := range users {
 		if user.PayoutCycle > 0 {
 			usersPerCycle[user.PayoutCycle]++
+		}
+	}
+
+	// Validate cycle distribution against expected number of cycles
+	if numberOfCycles > 0 {
+		log.Printf("Expected %d payout cycles, found users in cycles: %v", numberOfCycles, getKeys(usersPerCycle))
+
+		// Check for any cycles beyond expected range
+		for cycle := range usersPerCycle {
+			if cycle > numberOfCycles {
+				log.Printf("Warning: Found users in cycle %d, but only %d cycles were expected", cycle, numberOfCycles)
+			}
 		}
 	}
 
@@ -848,7 +994,16 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 	}
 
 	// Calculate leg volume summary
-	legVolumeSummary := calculateLegVolumeSummary(users)
+	legVolumeSummary := calculateLegVolumeSummary(users, products)
+
+	// Enhanced cycle analysis using numberOfCycles parameter
+	cycleAnalysis := fmt.Sprintf("Simulation configured for %d payout cycles", numberOfCycles)
+	if len(usersPerCycle) > 0 {
+		cycleAnalysis += fmt.Sprintf(", actual cycles with users: %d", len(usersPerCycle))
+	}
+
+	log.Printf("Simulation summary generated: %d users across %d cycles, %s",
+		len(users), len(usersPerCycle), cycleAnalysis)
 
 	return SimulationSummary{
 		TotalUsersGenerated: len(users),
@@ -868,7 +1023,6 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 	personalVolumeBreakdown := make(map[string]PersonalVolumeDetail)
 	teamVolumeBreakdown := make(map[string]TeamVolumeDetail)
 	legVolumeBreakdown := make(map[string]LegVolumeDetail)
-	volumeByPayoutCycle := make(map[int]PayoutCycleVolume)
 
 	// Generate personal volume breakdown
 	for _, user := range users {
@@ -911,11 +1065,7 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 		// Generate level breakdown
 		levelBreakdown := calculateLevelBreakdown(user.ID, users)
 		for level, data := range levelBreakdown {
-			volumeBreakdown[fmt.Sprintf("level_%d", level)] = VolumeBreakdown{
-				Level:  data.Level,
-				Users:  data.Users,
-				Volume: data.Volume,
-			}
+			volumeBreakdown[fmt.Sprintf("level_%d", level)] = VolumeBreakdown(data)
 		}
 
 		teamDetail := TeamVolumeDetail{
@@ -967,7 +1117,7 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 	}
 
 	// Generate volume breakdown by payout cycle
-	volumeByPayoutCycle = generateVolumeByPayoutCycle(users, products, genealogyType)
+	volumeByPayoutCycle := generateVolumeByPayoutCycle(users, products, genealogyType)
 
 	// Generate calculation methodology
 	methodology := fmt.Sprintf(`
@@ -1006,19 +1156,23 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 
 	// Calculate volumes for each cycle
 	for cycleNumber, cycleUsers := range usersByCycle {
-		// Calculate personal volume for this cycle
+		// Calculate personal volume for this cycle (from cycle-specific data)
 		personalVolume := 0.0
 		for _, user := range cycleUsers {
-			personalVolume += user.PersonalVolume
+			if user.PersonalVolumePerCycle[cycleNumber] > 0 {
+				personalVolume += user.PersonalVolumePerCycle[cycleNumber]
+			}
 		}
 
-		// Calculate team volume for this cycle (only for users in this cycle)
+		// Calculate team volume for this cycle (from cycle-specific data)
 		teamVolume := 0.0
 		for _, user := range cycleUsers {
-			teamVolume += user.TeamVolume
+			if user.TeamVolumePerCycle[cycleNumber] > 0 {
+				teamVolume += user.TeamVolumePerCycle[cycleNumber]
+			}
 		}
 
-		// Calculate leg volumes for this cycle
+		// Calculate leg volumes for this cycle (from cycle-specific data)
 		legVolumes := make(map[string]float64)
 		legKeys := getLegKeys(genealogyType)
 		for _, legKey := range legKeys {
@@ -1027,9 +1181,9 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 
 		// Calculate leg volumes for users in this cycle
 		for _, user := range cycleUsers {
-			for legKey, legVolume := range user.TeamLegVolumes {
-				if _, exists := legVolumes[legKey]; exists {
-					legVolumes[legKey] += legVolume
+			for _, legKey := range legKeys {
+				if user.LegVolumePerCycle[legKey] != nil && user.LegVolumePerCycle[legKey][cycleNumber] > 0 {
+					legVolumes[legKey] += user.LegVolumePerCycle[legKey][cycleNumber]
 				}
 			}
 		}
@@ -1390,4 +1544,13 @@ func calculateLegLevelBreakdownRecursive(userID string, users []SimulationUser, 
 			calculateLegLevelBreakdownRecursive(childID, users, legKey, genealogyType, level+1, levelData)
 		}
 	}
+}
+
+// getKeys returns the keys from a map as a slice
+func getKeys(m map[int]int) []int {
+	keys := make([]int, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

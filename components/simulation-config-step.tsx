@@ -516,7 +516,10 @@ export default function SimulationConfigStep({
 
       {/* Detailed Simulation Report */}
       {simulationResult && (
-        <SimulationReport simulationResult={simulationResult} />
+        <SimulationReport 
+          simulationResult={simulationResult} 
+          genealogyType={localConfig.genealogy_type}
+        />
       )}
     </div>
   )
