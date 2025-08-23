@@ -608,35 +608,9 @@ func calculateTeamVolumeWithCycleBreakdown(userID string, users []SimulationUser
 		}
 	}
 
-	cycleBreakdown := make(map[int]float64)
-	totalVolume := 0.0
-
-	// For root user (level 0), include their personal volume in team volume
-	if user.Level == 0 {
-		// Root user's personal volume goes to cycle 1 by default
-		cycleBreakdown[1] = user.PersonalVolume
-		totalVolume = user.PersonalVolume
-	}
-
-	// Recursively calculate team volume with cycle attribution from all downline
-	downlineVolume, downlineCycleBreakdown := calculateDownlineVolumeWithCycleAttribution(userID, users, 0)
-	
-	// For non-root users, include their personal volume
-	if user.Level > 0 {
-		cycle := user.PayoutCycle
-		if cycle > 0 {
-			cycleBreakdown[cycle] += user.PersonalVolume
-			totalVolume += user.PersonalVolume
-		}
-	}
-	
-	// Add downline volumes
-	totalVolume += downlineVolume
-	
-	// Merge cycle breakdowns from downline
-	for cycle, volume := range downlineCycleBreakdown {
-		cycleBreakdown[cycle] += volume
-	}
+	// calculateDownlineVolumeWithCycleAttribution now includes the current user's personal volume
+	// So we get the complete volume breakdown directly
+	totalVolume, cycleBreakdown := calculateDownlineVolumeWithCycleAttribution(userID, users, 0)
 
 	calculation := fmt.Sprintf("Team Volume = Personal Volume + Sum of all downline Personal Volumes at unlimited levels = $%.2f", totalVolume)
 	if len(cycleBreakdown) > 0 {
@@ -668,11 +642,17 @@ func calculateDownlineVolumeWithCycleAttribution(userID string, users []Simulati
 		return 0.0, make(map[int]float64)
 	}
 
-	totalVolume := 0.0  // Start with 0 for downline calculation
+	totalVolume := user.PersonalVolume // Include current user's personal volume
 	cycleBreakdown := make(map[int]float64)
 
-	// For downline calculation, we don't include the current user's personal volume
-	// This function is used to calculate ONLY downline volumes, not total team volume
+	// Add current user's personal volume to cycle breakdown
+	cycle := user.PayoutCycle
+	if cycle > 0 {
+		cycleBreakdown[cycle] += user.PersonalVolume
+	} else if depth == 0 {
+		// For root user (level 0), include their personal volume in cycle 1 by default
+		cycleBreakdown[1] += user.PersonalVolume
+	}
 
 	// Recursively calculate from all children (unlimited levels)
 	for _, childID := range user.Children {
