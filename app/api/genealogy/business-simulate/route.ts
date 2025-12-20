@@ -7,6 +7,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     
     console.log('Business simulation request:', JSON.stringify(body, null, 2))
+    console.log('GO_SERVICE_URL:', GO_SERVICE_URL)
+    
+    // Validate products before sending
+    if (!body.products || body.products.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one product is required for simulation. Please add products in Step 2.' },
+        { status: 400 }
+      )
+    }
     
     const response = await fetch(`${GO_SERVICE_URL}/api/genealogy/business-simulate`, {
       method: 'POST',
