@@ -6,6 +6,7 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'epixel_mlm_tools',
   password: process.env.DB_PASSWORD || 'password',
   port: parseInt(process.env.DB_PORT || '5432'),
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 })
 
 export default pool 
