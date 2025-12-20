@@ -632,6 +632,7 @@ export default function UsersPage() {
                                         <SelectContent>
                                           <SelectItem value="admin">Admin</SelectItem>
                                           <SelectItem value="user">User</SelectItem>
+                                          <SelectItem value="business_user">Business User</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
