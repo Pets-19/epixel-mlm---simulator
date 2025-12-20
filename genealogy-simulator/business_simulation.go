@@ -265,17 +265,20 @@ func handleBusinessSimulation(w http.ResponseWriter, r *http.Request) {
 
 	simulationID := fmt.Sprintf("biz_sim_%d", time.Now().UnixNano())
 	log.Printf("Generated business simulation ID: %s", simulationID)
+	log.Printf("Genealogy type name from DB: %s", genealogyType.Name)
 
 	var simResponse SimulationResponse
 	genealogyTypeLower := strings.ToLower(genealogyType.Name)
-	switch genealogyTypeLower {
-	case "binary":
+
+	// Match genealogy type - support both "binary" and "binary plan" formats
+	switch {
+	case strings.Contains(genealogyTypeLower, "binary"):
 		simulator := NewBinaryPlanSimulator(simulationID)
 		simResponse = simulator.Simulate(simReq)
-	case "unilevel":
+	case strings.Contains(genealogyTypeLower, "unilevel"):
 		simulator := NewUnilevelPlanSimulator(simulationID, req.MaxChildrenCount)
 		simResponse = simulator.Simulate(simReq)
-	case "matrix":
+	case strings.Contains(genealogyTypeLower, "matrix"):
 		simulator := NewMatrixPlanSimulator(simulationID, req.MaxChildrenCount)
 		simResponse = simulator.Simulate(simReq)
 	default:
