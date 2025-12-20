@@ -100,8 +100,8 @@ export async function PUT(
       }
     }
 
-    if (!role || !['admin', 'user'].includes(role)) {
-      errors.push('Valid role is required (admin or user)')
+    if (!role || !['admin', 'user', 'business_user'].includes(role)) {
+      errors.push('Valid role is required (admin, user, or business_user)')
     }
 
     // WhatsApp number validation (mandatory)
