@@ -267,14 +267,15 @@ func handleBusinessSimulation(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Generated business simulation ID: %s", simulationID)
 
 	var simResponse SimulationResponse
-	switch genealogyType.Name {
-	case "Binary":
+	genealogyTypeLower := strings.ToLower(genealogyType.Name)
+	switch genealogyTypeLower {
+	case "binary":
 		simulator := NewBinaryPlanSimulator(simulationID)
 		simResponse = simulator.Simulate(simReq)
-	case "Unilevel":
+	case "unilevel":
 		simulator := NewUnilevelPlanSimulator(simulationID, req.MaxChildrenCount)
 		simResponse = simulator.Simulate(simReq)
-	case "Matrix":
+	case "matrix":
 		simulator := NewMatrixPlanSimulator(simulationID, req.MaxChildrenCount)
 		simResponse = simulator.Simulate(simReq)
 	default:
