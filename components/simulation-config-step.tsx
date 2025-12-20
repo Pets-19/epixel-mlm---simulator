@@ -158,11 +158,11 @@ export default function SimulationConfigStep({
         body: JSON.stringify(simulationRequest)
       })
 
-      if (!response.ok) {
-        throw new Error(`Simulation failed: ${response.statusText}`)
-      }
-
       const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || `Simulation failed: ${response.statusText}`)
+      }
       
       setSimulationResult(result)
       

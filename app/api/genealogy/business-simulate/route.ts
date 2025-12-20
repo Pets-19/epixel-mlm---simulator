@@ -16,6 +16,30 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Validate sales ratios add up to 100%
+    const totalSalesRatio = body.products.reduce((sum: number, p: any) => sum + (p.product_sales_ratio || 0), 0)
+    if (totalSalesRatio < 99.99 || totalSalesRatio > 100.01) {
+      return NextResponse.json(
+        { error: `Product sales ratios must total 100%. Current total: ${totalSalesRatio.toFixed(2)}%` },
+        { status: 400 }
+      )
+    }
+
+    // Validate other required fields
+    if (!body.max_expected_users || body.max_expected_users <= 0) {
+      return NextResponse.json(
+        { error: 'Maximum expected users must be greater than 0' },
+        { status: 400 }
+      )
+    }
+
+    if (!body.number_of_payout_cycles || body.number_of_payout_cycles <= 0) {
+      return NextResponse.json(
+        { error: 'Number of payout cycles must be greater than 0' },
+        { status: 400 }
+      )
+    }
     
     const response = await fetch(`${GO_SERVICE_URL}/api/genealogy/business-simulate`, {
       method: 'POST',
@@ -30,8 +54,9 @@ export async function POST(request: NextRequest) {
     console.log('Go service response:', responseText)
 
     if (!response.ok) {
+      const errorMessage = responseText || 'Go simulation service returned an error'
       return NextResponse.json(
-        { error: `Simulation failed: ${responseText}` },
+        { error: errorMessage },
         { status: response.status }
       )
     }
@@ -40,8 +65,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Business simulation proxy error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    // Check if it's a connection error
+    if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
+      return NextResponse.json(
+        { error: 'Simulation service is currently unavailable. It may be starting up (takes ~50 seconds on free tier). Please try again in a moment.' },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to connect to simulation service', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to connect to simulation service', details: errorMessage },
       { status: 500 }
     )
   }
