@@ -17,10 +17,10 @@ var db *sql.DB
 // InitDB initializes the database connection
 func InitDB() {
 	var err error
-	
+
 	// Check for full DATABASE_URL first (for cloud deployments like Neon)
 	connStr := os.Getenv("DATABASE_URL")
-	
+
 	if connStr == "" {
 		// Fallback to individual env vars for local development
 		dbHost := os.Getenv("DB_HOST")
@@ -47,11 +47,11 @@ func InitDB() {
 		if sslMode == "" {
 			sslMode = "disable"
 		}
-		
-		connStr = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", 
+
+		connStr = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
 			dbUser, dbPassword, dbHost, dbPort, dbName, sslMode)
 	}
-	
+
 	log.Printf("Connecting to database...")
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
