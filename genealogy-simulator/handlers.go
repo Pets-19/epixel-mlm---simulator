@@ -17,12 +17,42 @@ var db *sql.DB
 // InitDB initializes the database connection
 func InitDB() {
 	var err error
-	dbHost := os.Getenv("DB_HOST")
-	if dbHost == "" {
-		dbHost = "localhost"
+	
+	// Check for full DATABASE_URL first (for cloud deployments like Neon)
+	connStr := os.Getenv("DATABASE_URL")
+	
+	if connStr == "" {
+		// Fallback to individual env vars for local development
+		dbHost := os.Getenv("DB_HOST")
+		if dbHost == "" {
+			dbHost = "localhost"
+		}
+		dbUser := os.Getenv("DB_USER")
+		if dbUser == "" {
+			dbUser = "postgres"
+		}
+		dbPassword := os.Getenv("DB_PASSWORD")
+		if dbPassword == "" {
+			dbPassword = "password"
+		}
+		dbName := os.Getenv("DB_NAME")
+		if dbName == "" {
+			dbName = "epixel_mlm_tools"
+		}
+		dbPort := os.Getenv("DB_PORT")
+		if dbPort == "" {
+			dbPort = "5432"
+		}
+		sslMode := os.Getenv("DB_SSLMODE")
+		if sslMode == "" {
+			sslMode = "disable"
+		}
+		
+		connStr = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", 
+			dbUser, dbPassword, dbHost, dbPort, dbName, sslMode)
 	}
-
-	connStr := fmt.Sprintf("postgres://postgres:password@%s:5432/epixel_mlm_tools?sslmode=disable", dbHost)
+	
+	log.Printf("Connecting to database...")
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
@@ -30,8 +60,9 @@ func InitDB() {
 
 	err = db.Ping()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Database connection failed: ", err)
 	}
+	log.Printf("Database connected successfully!")
 }
 
 // handleGetGenealogyTypes returns all available genealogy types
