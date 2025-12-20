@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,38 @@ export default function BusinessPlanWizard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  // DERIVED VALIDATION - Single source of truth, always up-to-date
+  const isCommissionValid = useMemo(() => {
+    if (!commissionConfig) return false
+    
+    // Check if at least one standard commission is enabled
+    const hasValidStandard = commissionConfig.standard_commissions.some(comm => comm.is_enabled)
+    if (!hasValidStandard) return false
+    
+    // Filter only ENABLED custom commissions and validate their fields
+    const enabledCustomCommissions = commissionConfig.custom_commissions.filter(comm => comm.is_enabled)
+    const hasValidCustom = enabledCustomCommissions.length === 0 
+      ? true 
+      : enabledCustomCommissions.every(comm => 
+          comm.name.trim() !== '' && 
+          comm.percentage > 0 && 
+          comm.trigger_value > 0 &&
+          (comm.max_level === undefined || comm.max_level > 0)
+        )
+    if (!hasValidCustom) return false
+    
+    // Check total commission doesn't exceed 100%
+    const standardTotal = commissionConfig.standard_commissions
+      .filter(comm => comm.is_enabled)
+      .reduce((sum, comm) => sum + comm.percentage, 0)
+    const customTotal = commissionConfig.custom_commissions
+      .filter(comm => comm.is_enabled)
+      .reduce((sum, comm) => sum + comm.percentage, 0)
+    const totalCommission = standardTotal + customTotal
+    
+    return totalCommission <= 100
+  }, [commissionConfig])
 
   if (!user || (user.role !== 'admin' && user.role !== 'system_admin')) {
     return (
@@ -160,7 +192,7 @@ export default function BusinessPlanWizard() {
       case 3:
         return simulationConfig !== null
       case 4:
-        return commissionConfig !== null
+        return isCommissionValid
       case 5:
         return true
       default:
@@ -185,15 +217,15 @@ export default function BusinessPlanWizard() {
             onConfigChange={handleBusinessConfig}
           />
         )
-              case 3:
-          return (
-            <SimulationConfigStep
-              config={simulationConfig}
-              products={products}
-              onConfigChange={handleSimulationConfig}
-              onSimulationComplete={handleSimulationComplete}
-            />
-          )
+      case 3:
+        return (
+          <SimulationConfigStep
+            config={simulationConfig}
+            products={products}
+            onConfigChange={handleSimulationConfig}
+            onSimulationComplete={handleSimulationComplete}
+          />
+        )
       case 4:
         return (
           <CommissionStep
@@ -306,7 +338,7 @@ export default function BusinessPlanWizard() {
                   Previous
                 </Button>
 
-                {currentStep < 4 ? (
+                {currentStep < 5 ? (
                   <Button
                     onClick={handleNext}
                     disabled={!canProceedToNext()}

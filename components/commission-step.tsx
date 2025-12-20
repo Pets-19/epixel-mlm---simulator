@@ -195,7 +195,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
         return 'bg-gray-100 text-gray-800'
     }
   }
-
+  
   const calculateTotalCommission = () => {
     const standardTotal = localConfig.standard_commissions
       .filter(comm => comm.is_enabled)
@@ -209,11 +209,49 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
   }
 
   const validateConfig = () => {
+    // Check if at least one standard commission is enabled
     const hasValidStandard = localConfig.standard_commissions.some(comm => comm.is_enabled)
-    const hasValidCustom = localConfig.custom_commissions.every(comm => 
-      comm.is_enabled ? (comm.name.trim() && comm.description.trim()) : true
+    
+    // Filter only ENABLED custom commissions and validate their fields
+    const enabledCustomCommissions = localConfig.custom_commissions.filter(comm => comm.is_enabled)
+    const hasValidCustom = enabledCustomCommissions.length === 0 
+      ? true 
+      : enabledCustomCommissions.every(comm => 
+          comm.name.trim() !== '' && 
+          comm.percentage > 0 && 
+          comm.trigger_value > 0 &&
+          (comm.max_level === undefined || comm.max_level > 0)
+        )
+    
+    // Check total commission doesn't exceed 100%
+    const totalCommission = calculateTotalCommission()
+    const isWithinLimit = totalCommission <= 100
+    
+    return hasValidStandard && hasValidCustom && isWithinLimit
+  }
+  
+  const getValidationErrors = () => {
+    const errors: string[] = []
+    
+    const enabledStandardCount = localConfig.standard_commissions.filter(c => c.is_enabled).length
+    if (enabledStandardCount === 0) {
+      errors.push('Enable at least one standard commission')
+    }
+    
+    const enabledCustomCommissions = localConfig.custom_commissions.filter(comm => comm.is_enabled)
+    const invalidCustom = enabledCustomCommissions.filter(comm => 
+      !comm.name.trim() || comm.percentage <= 0 || comm.trigger_value <= 0
     )
-    return hasValidStandard && hasValidCustom
+    if (invalidCustom.length > 0) {
+      errors.push('Complete all enabled custom commission fields')
+    }
+    
+    const totalCommission = calculateTotalCommission()
+    if (totalCommission > 100) {
+      errors.push(`Total commission (${totalCommission.toFixed(1)}%) exceeds 100%`)
+    }
+    
+    return errors
   }
 
   return (
@@ -538,9 +576,21 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
 
       {/* Validation Status */}
       {!validateConfig() && (
-        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-          <p className="text-sm text-yellow-800">
-            Please enable at least one standard commission and complete all custom commission fields to proceed.
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm font-medium text-red-800 mb-2">Cannot proceed:</p>
+          <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+            {getValidationErrors().map((error, index) => (
+              <li key={index}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
+      {/* Success Status */}
+      {validateConfig() && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-sm font-medium text-green-800">
+            ✓ Commission configuration is valid. You can proceed to the next step.
           </p>
         </div>
       )}

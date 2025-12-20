@@ -78,9 +78,9 @@ export async function createBusinessPlan(data: BusinessPlanCreate): Promise<Busi
     
     // Create business plan
     const planQuery = `
-      INSERT INTO business_plan_simulations (user_id, name, genealogy_simulation_id, created_by, commission_config)
+      INSERT INTO business_plan_simulations (user_id, business_name, genealogy_simulation_id, created_by, commission_config)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, user_id, name, status, created_at, updated_at
+      RETURNING id, user_id, business_name, status, created_at, updated_at
     `
     
     const planResult = await client.query(planQuery, [
@@ -160,9 +160,9 @@ export async function getBusinessPlanById(id: number): Promise<BusinessPlanSimul
   
   return {
     ...businessPlan,
-    business_name: businessPlan.name, // Map database field to interface field
+    business_name: businessPlan.business_name, // Database field matches interface field
     products: productsResult.rows,
-    commission_config: businessPlan.commission_config ? JSON.parse(businessPlan.commission_config) : null,
+    commission_config: businessPlan.commission_config || null, // JSONB column returns object, not string
     user: {
       id: businessPlan.user_id,
       name: businessPlan.user_name,
@@ -185,8 +185,8 @@ export async function getBusinessPlansByUserId(userId: number): Promise<Business
   
   const businessPlans = result.rows.map(row => ({
     ...row,
-    business_name: row.name, // Map database field to interface field
-    commission_config: row.commission_config ? JSON.parse(row.commission_config) : null,
+    business_name: row.business_name, // Database field matches interface field
+    commission_config: row.commission_config || null, // JSONB column returns object, not string
     user: {
       id: row.user_id,
       name: row.user_name,
@@ -223,8 +223,8 @@ export async function getAllBusinessPlans(): Promise<BusinessPlanSimulation[]> {
   
   const businessPlans = result.rows.map(row => ({
     ...row,
-    business_name: row.name, // Map database field to interface field
-    commission_config: row.commission_config ? JSON.parse(row.commission_config) : null,
+    business_name: row.business_name, // Database field matches interface field
+    commission_config: row.commission_config || null, // JSONB column returns object, not string
     user: {
       id: row.user_id,
       name: row.user_name,
@@ -261,7 +261,7 @@ export async function updateBusinessPlan(id: number, data: BusinessPlanUpdate): 
     let paramCount = 1
     
     if (data.business_name !== undefined) {
-      updateFields.push(`name = $${paramCount}`)
+      updateFields.push(`business_name = $${paramCount}`)
       updateValues.push(data.business_name)
       paramCount++
     }

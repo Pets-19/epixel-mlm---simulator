@@ -149,8 +149,8 @@ export default function SimulationConfigStep({
         }))
       }
 
-      // Call Go API for business simulation
-      const response = await fetch('http://localhost:8080/api/genealogy/business-simulate', {
+      // Call Next.js API proxy for business simulation (avoids CORS and ad blocker issues)
+      const response = await fetch('/api/genealogy/business-simulate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

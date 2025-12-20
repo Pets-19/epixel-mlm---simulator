@@ -105,8 +105,16 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Create business plan error:', error)
+    // Log the full error details
+    if (error instanceof Error) {
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+    }
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }

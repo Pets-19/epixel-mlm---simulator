@@ -17,6 +17,7 @@ services:
       - ./database/migration_business_plan_tables.sql:/docker-entrypoint-initdb.d/06-migration_business_plan_tables.sql
       - ./database/migration_add_product_sales_ratio.sql:/docker-entrypoint-initdb.d/07-migration_add_product_sales_ratio.sql
       - ./database/migration_add_commission_config.sql:/docker-entrypoint-initdb.d/08-migration_add_commission_config.sql
+      - ./database/insert_default_admin.sql:/docker-entrypoint-initdb.d/09-insert_default_admin.sql
 
     ports:
       - "5432:5432"
