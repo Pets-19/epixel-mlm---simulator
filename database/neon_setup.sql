@@ -103,13 +103,12 @@ CREATE TABLE business_plan_templates (
 -- =====================
 CREATE TABLE business_plan_simulations (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    genealogy_simulation_id VARCHAR(100),
+    business_name VARCHAR(255) NOT NULL,
+    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'completed', 'cancelled')),
     created_by INTEGER REFERENCES users(id),
-    genealogy_type_id INTEGER REFERENCES genealogy_types(id),
-    genealogy_simulation_id INTEGER REFERENCES genealogy_simulations(id),
     commission_config JSONB DEFAULT '{}',
-    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -121,9 +120,11 @@ CREATE TABLE business_products (
     id SERIAL PRIMARY KEY,
     business_plan_id INTEGER REFERENCES business_plan_simulations(id) ON DELETE CASCADE,
     product_name VARCHAR(255) NOT NULL,
-    product_type VARCHAR(100) NOT NULL,
-    price DECIMAL(10,2) NOT NULL,
-    product_sales_ratio INTEGER DEFAULT 100 CHECK (product_sales_ratio >= 0 AND product_sales_ratio <= 100),
+    product_price DECIMAL(10,2) NOT NULL CHECK (product_price > 0),
+    business_volume DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (business_volume >= 0),
+    product_sales_ratio DECIMAL(5,2) NOT NULL CHECK (product_sales_ratio >= 0 AND product_sales_ratio <= 100),
+    product_type VARCHAR(50) NOT NULL CHECK (product_type IN ('membership', 'retail', 'digital')),
+    sort_order INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
