@@ -93,29 +93,37 @@ export default function GenealogySimulationPage() {
 
     setSimulating(true)
     try {
+      const requestBody = {
+        genealogy_type_id: parseInt(selectedType),
+        max_expected_users: maxUsers,
+        payout_cycle_type: payoutCycleType,
+        number_of_cycles: numberOfCycles,
+        max_children_count: maxChildrenCount,
+      }
+      
+      console.log('Sending simulation request:', requestBody)
+      
       const response = await fetch('/api/genealogy/simulate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          genealogy_type_id: parseInt(selectedType),
-          max_expected_users: maxUsers,
-          payout_cycle_type: payoutCycleType,
-          number_of_cycles: numberOfCycles,
-          max_children_count: maxChildrenCount,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
+      const result = await response.json()
+      console.log('Simulation response:', result)
+
       if (response.ok) {
-        const result = await response.json()
         setSimulationResult(result)
       } else {
-        alert('Error running simulation')
+        const errorMsg = result.details || result.error || 'Unknown error'
+        console.error('Simulation error:', result)
+        alert(`Error running simulation:\n${errorMsg}${result.go_service_url ? `\n\nGo Service URL: ${result.go_service_url}` : ''}`)
       }
     } catch (error) {
       console.error('Error running simulation:', error)
-      alert('Error running simulation')
+      alert(`Error running simulation: ${error instanceof Error ? error.message : 'Network error'}`)
     } finally {
       setSimulating(false)
     }
