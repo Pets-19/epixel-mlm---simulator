@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -128,15 +129,18 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 	// Generate simulation ID
 	simulationID := uuid.New().String()
 	log.Printf("Generated simulation ID: %s", simulationID)
+	log.Printf("Genealogy type name from DB: %s", genealogyType.Name)
 
-	// Create simulator based on genealogy type
+	// Create simulator based on genealogy type (case-insensitive, partial match)
 	var response SimulationResponse
-	switch genealogyType.Name {
-	case "Binary":
+	genealogyTypeLower := strings.ToLower(genealogyType.Name)
+	
+	switch {
+	case strings.Contains(genealogyTypeLower, "binary"):
 		log.Println("Creating binary plan simulator")
 		simulator := NewBinaryPlanSimulator(simulationID)
 		response = simulator.Simulate(req)
-	case "Unilevel":
+	case strings.Contains(genealogyTypeLower, "unilevel"):
 		log.Println("Creating unilevel plan simulator")
 		maxChildrenCount := req.MaxChildrenCount
 		if maxChildrenCount <= 0 {
@@ -144,7 +148,7 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 		}
 		simulator := NewUnilevelPlanSimulator(simulationID, maxChildrenCount)
 		response = simulator.Simulate(req)
-	case "Matrix":
+	case strings.Contains(genealogyTypeLower, "matrix"):
 		log.Println("Creating matrix plan simulator")
 		maxChildrenCount := req.MaxChildrenCount
 		if maxChildrenCount <= 0 {
