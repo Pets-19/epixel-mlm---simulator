@@ -113,11 +113,11 @@ func handleGetGenealogyTypes(w http.ResponseWriter, r *http.Request) {
 // handleCreateGenealogyType creates a new genealogy type
 func handleCreateGenealogyType(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name              string                 `json:"name"`
-		Description       string                 `json:"description"`
-		MaxChildrenPerNode int                   `json:"max_children_per_node"`
-		IsActive          bool                   `json:"is_active"`
-		Rules             map[string]interface{} `json:"rules"`
+		Name               string                 `json:"name"`
+		Description        string                 `json:"description"`
+		MaxChildrenPerNode int                    `json:"max_children_per_node"`
+		IsActive           bool                   `json:"is_active"`
+		Rules              map[string]interface{} `json:"rules"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -161,12 +161,12 @@ func handleCreateGenealogyType(w http.ResponseWriter, r *http.Request) {
 
 	// Return the created type
 	response := map[string]interface{}{
-		"id":                   newID,
-		"name":                 req.Name,
-		"description":          req.Description,
+		"id":                    newID,
+		"name":                  req.Name,
+		"description":           req.Description,
 		"max_children_per_node": req.MaxChildrenPerNode,
-		"is_active":            req.IsActive,
-		"rules":                req.Rules,
+		"is_active":             req.IsActive,
+		"rules":                 req.Rules,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -233,9 +233,22 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 		simulator := NewMatrixPlanSimulator(simulationID, maxChildrenCount)
 		response = simulator.Simulate(req)
 	default:
-		log.Printf("Unsupported genealogy type: %s", genealogyType.Name)
-		http.Error(w, "Unsupported genealogy type", http.StatusBadRequest)
-		return
+		// Fallback: Use max_children_per_node to determine plan type
+		// 2 children = binary-like, >2 = matrix-like
+		log.Printf("Custom genealogy type '%s', using max_children_count=%d to determine plan type", genealogyType.Name, req.MaxChildrenCount)
+		maxChildrenCount := req.MaxChildrenCount
+		if maxChildrenCount <= 0 {
+			maxChildrenCount = genealogyType.MaxChildrenPerNode
+		}
+		if maxChildrenCount <= 2 {
+			log.Println("Using binary plan simulator for custom type")
+			simulator := NewBinaryPlanSimulator(simulationID)
+			response = simulator.Simulate(req)
+		} else {
+			log.Println("Using matrix plan simulator for custom type")
+			simulator := NewMatrixPlanSimulator(simulationID, maxChildrenCount)
+			response = simulator.Simulate(req)
+		}
 	}
 
 	log.Printf("Simulation completed. Generated %d nodes", len(response.Nodes))

@@ -271,6 +271,7 @@ func handleBusinessSimulation(w http.ResponseWriter, r *http.Request) {
 	genealogyTypeLower := strings.ToLower(genealogyType.Name)
 
 	// Match genealogy type - support both "binary" and "binary plan" formats
+	// Also fallback to max_children_per_node for custom named types
 	switch {
 	case strings.Contains(genealogyTypeLower, "binary"):
 		simulator := NewBinaryPlanSimulator(simulationID)
@@ -282,8 +283,16 @@ func handleBusinessSimulation(w http.ResponseWriter, r *http.Request) {
 		simulator := NewMatrixPlanSimulator(simulationID, req.MaxChildrenCount)
 		simResponse = simulator.Simulate(simReq)
 	default:
-		http.Error(w, "Unsupported genealogy type", http.StatusBadRequest)
-		return
+		// Fallback: Use max_children_per_node to determine plan type
+		// 2 children = binary-like, >2 = matrix-like
+		log.Printf("Custom genealogy type '%s', using max_children_per_node=%d to determine plan type", genealogyType.Name, req.MaxChildrenCount)
+		if req.MaxChildrenCount <= 2 {
+			simulator := NewBinaryPlanSimulator(simulationID)
+			simResponse = simulator.Simulate(simReq)
+		} else {
+			simulator := NewMatrixPlanSimulator(simulationID, req.MaxChildrenCount)
+			simResponse = simulator.Simulate(simReq)
+		}
 	}
 
 	// Enhance simulation with business logic
