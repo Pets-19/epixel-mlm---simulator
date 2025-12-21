@@ -134,7 +134,7 @@ func handleSimulation(w http.ResponseWriter, r *http.Request) {
 	// Create simulator based on genealogy type (case-insensitive, partial match)
 	var response SimulationResponse
 	genealogyTypeLower := strings.ToLower(genealogyType.Name)
-	
+
 	switch {
 	case strings.Contains(genealogyTypeLower, "binary"):
 		log.Println("Creating binary plan simulator")
