@@ -66,6 +66,18 @@ func InitDB() {
 	log.Printf("Database connected successfully!")
 }
 
+// handleGenealogyTypes handles both GET and POST for genealogy types
+func handleGenealogyTypes(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		handleGetGenealogyTypes(w, r)
+	case "POST":
+		handleCreateGenealogyType(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 // handleGetGenealogyTypes returns all available genealogy types
 func handleGetGenealogyTypes(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT id, name, description, is_active, created_at, updated_at FROM genealogy_types WHERE is_active = true")
@@ -96,6 +108,70 @@ func handleGetGenealogyTypes(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(types)
+}
+
+// handleCreateGenealogyType creates a new genealogy type
+func handleCreateGenealogyType(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name              string                 `json:"name"`
+		Description       string                 `json:"description"`
+		MaxChildrenPerNode int                   `json:"max_children_per_node"`
+		IsActive          bool                   `json:"is_active"`
+		Rules             map[string]interface{} `json:"rules"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Error decoding create genealogy type request: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Creating genealogy type: %+v", req)
+
+	// Validate required fields
+	if req.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Convert rules to JSON string
+	rulesJSON, err := json.Marshal(req.Rules)
+	if err != nil {
+		log.Printf("Error marshalling rules: %v", err)
+		http.Error(w, "Invalid rules format", http.StatusBadRequest)
+		return
+	}
+
+	// Insert into database
+	var newID int
+	err = db.QueryRow(
+		`INSERT INTO genealogy_types (name, description, max_children_per_node, is_active, rules) 
+		 VALUES ($1, $2, $3, $4, $5) 
+		 RETURNING id`,
+		req.Name, req.Description, req.MaxChildrenPerNode, req.IsActive, string(rulesJSON),
+	).Scan(&newID)
+
+	if err != nil {
+		log.Printf("Error inserting genealogy type: %v", err)
+		http.Error(w, "Failed to create genealogy type: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Created genealogy type with ID: %d", newID)
+
+	// Return the created type
+	response := map[string]interface{}{
+		"id":                   newID,
+		"name":                 req.Name,
+		"description":          req.Description,
+		"max_children_per_node": req.MaxChildrenPerNode,
+		"is_active":            req.IsActive,
+		"rules":                req.Rules,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
 }
 
 // handleSimulation handles genealogy simulation requests
