@@ -53,6 +53,7 @@ type BusinessSimulationRequest struct {
 	PayoutCycle          string            `json:"payout_cycle"`
 	NumberOfPayoutCycles int               `json:"number_of_payout_cycles"`
 	MaxChildrenCount     int               `json:"max_children_count"`
+	PayoutCap            float64           `json:"payout_cap"`
 	Products             []BusinessProduct `json:"products"`
 }
 
@@ -118,6 +119,13 @@ type PayoutCycleVolume struct {
 	ProductDistribution map[string]ProductCycleDistribution `json:"product_distribution"`
 	LevelBreakdown      map[int]LevelVolumeData             `json:"level_breakdown"`
 	CycleSummary        string                              `json:"cycle_summary"`
+
+	// Binary Plan Specifics
+	CarryForwardLeft  float64 `json:"carry_forward_left"`
+	CarryForwardRight float64 `json:"carry_forward_right"`
+	MatchedVolume     float64 `json:"matched_volume"`
+	PayoutVolume      float64 `json:"payout_volume"`
+	CapFlush          float64 `json:"cap_flush"`
 }
 
 // ProductCycleDistribution shows product distribution within a cycle
@@ -436,7 +444,7 @@ func enhanceSimulationWithBusinessLogic(simResponse SimulationResponse, req Busi
 	summary := generateSimulationSummary(users, req.Products, req.NumberOfPayoutCycles)
 
 	// Generate volume calculations breakdown
-	volumeCalculations := generateVolumeCalculations(users, req.Products, req.GenealogyType)
+	volumeCalculations := generateVolumeCalculations(users, req.Products, req.GenealogyType, req.PayoutCap)
 
 	return BusinessSimulationResponse{
 		ID:                   simResponse.SimulationID,
@@ -1030,7 +1038,7 @@ func generateSimulationSummary(users []SimulationUser, products []BusinessProduc
 }
 
 // generateVolumeCalculations generates detailed volume calculation breakdown
-func generateVolumeCalculations(users []SimulationUser, products []BusinessProduct, genealogyType string) VolumeCalculations {
+func generateVolumeCalculations(users []SimulationUser, products []BusinessProduct, genealogyType string, payoutCap float64) VolumeCalculations {
 	log.Println("Generating volume calculations breakdown")
 
 	personalVolumeBreakdown := make(map[string]PersonalVolumeDetail)
@@ -1130,7 +1138,7 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 	}
 
 	// Generate volume breakdown by payout cycle
-	volumeByPayoutCycle := generateVolumeByPayoutCycle(users, products, genealogyType)
+	volumeByPayoutCycle := generateVolumeByPayoutCycle(users, products, genealogyType, payoutCap)
 
 	// Generate calculation methodology
 	methodology := fmt.Sprintf(`
@@ -1155,7 +1163,7 @@ func generateVolumeCalculations(users []SimulationUser, products []BusinessProdu
 }
 
 // generateVolumeByPayoutCycle generates volume breakdown by payout cycle
-func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProduct, genealogyType string) map[int]PayoutCycleVolume {
+func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProduct, genealogyType string, payoutCap float64) map[int]PayoutCycleVolume {
 	cycleVolumes := make(map[int]PayoutCycleVolume)
 
 	// Group users by payout cycle
@@ -1167,36 +1175,67 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 		}
 	}
 
+	// Track carry forward volumes for binary plan
+	carryForwardLeft := 0.0
+	carryForwardRight := 0.0
+
+	// Get sorted cycles to ensure correct carry forward calculation
+	cycles := getKeys(usersByCycle)
+	// Simple bubble sort for cycles (num cycles is small)
+	for i := 0; i < len(cycles)-1; i++ {
+		for j := 0; j < len(cycles)-i-1; j++ {
+			if cycles[j] > cycles[j+1] {
+				cycles[j], cycles[j+1] = cycles[j+1], cycles[j]
+			}
+		}
+	}
+	
+	// Ensure we process all cycles from 1 to max cycle found, even if some have no users
+	maxCycle := 0
+	if len(cycles) > 0 {
+		maxCycle = cycles[len(cycles)-1]
+	}
+
+	// Find Root User (Level 0) for Team/Leg Analysis
+	var rootUser *SimulationUser
+	for i := range users {
+		// Level 0 is consistently the root in this simulation
+		if users[i].Level == 0 {
+			rootUser = &users[i]
+			break
+		}
+	}
+
 	// Calculate volumes for each cycle
-	for cycleNumber, cycleUsers := range usersByCycle {
-		// Calculate personal volume for this cycle (from cycle-specific data)
+	for cycleNumber := 1; cycleNumber <= maxCycle; cycleNumber++ {
+		cycleUsers := usersByCycle[cycleNumber]
+		
+		// Calculate personal volume for this cycle (Total Sales in Company/Tree)
 		personalVolume := 0.0
-		for _, user := range cycleUsers {
+		for _, user := range users { 
 			if user.PersonalVolumePerCycle[cycleNumber] > 0 {
 				personalVolume += user.PersonalVolumePerCycle[cycleNumber]
 			}
 		}
 
-		// Calculate team volume for this cycle (from cycle-specific data)
+		// Calculate team & leg volumes based on Root User (The Simulator)
 		teamVolume := 0.0
-		for _, user := range cycleUsers {
-			if user.TeamVolumePerCycle[cycleNumber] > 0 {
-				teamVolume += user.TeamVolumePerCycle[cycleNumber]
-			}
-		}
-
-		// Calculate leg volumes for this cycle (from cycle-specific data)
 		legVolumes := make(map[string]float64)
 		legKeys := getLegKeys(genealogyType)
 		for _, legKey := range legKeys {
 			legVolumes[legKey] = 0.0
 		}
-
-		// Calculate leg volumes for users in this cycle
-		for _, user := range cycleUsers {
+		
+		if rootUser != nil {
+			// Team Volume
+			if rootUser.TeamVolumePerCycle[cycleNumber] > 0 {
+				teamVolume = rootUser.TeamVolumePerCycle[cycleNumber]
+			}
+			
+			// Leg Volumes
 			for _, legKey := range legKeys {
-				if user.LegVolumePerCycle[legKey] != nil && user.LegVolumePerCycle[legKey][cycleNumber] > 0 {
-					legVolumes[legKey] += user.LegVolumePerCycle[legKey][cycleNumber]
+				if rootUser.LegVolumePerCycle[legKey] != nil && rootUser.LegVolumePerCycle[legKey][cycleNumber] > 0 {
+					legVolumes[legKey] = rootUser.LegVolumePerCycle[legKey][cycleNumber]
 				}
 			}
 		}
@@ -1206,6 +1245,44 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 
 		// Calculate level breakdown for this cycle
 		levelBreakdown := calculateLevelBreakdownForCycle(cycleUsers)
+
+		// Binary Plan Logic: Carry Forward & Capping
+		var matchedVolume, cvPayoutVolume, capFlush, nextCarryLeft, nextCarryRight float64
+		
+		if genealogyType == "binary" {
+			// Current Cycle Raw Volumes
+			currentLeft := legVolumes["left"]
+			currentRight := legVolumes["right"]
+
+			// Adds Carry Forward
+			totalLeft := currentLeft + carryForwardLeft
+			totalRight := currentRight + carryForwardRight
+
+			// Calculate Match
+			if totalLeft < totalRight {
+				matchedVolume = totalLeft
+			} else {
+				matchedVolume = totalRight
+			}
+
+			// Calculate New Carry Forward
+			nextCarryLeft = totalLeft - matchedVolume
+			nextCarryRight = totalRight - matchedVolume
+
+			// Apply Payout Cap
+			cvPayoutVolume = matchedVolume
+			if payoutCap > 0 && matchedVolume > payoutCap {
+				cvPayoutVolume = payoutCap
+				capFlush = matchedVolume - payoutCap
+			}
+			
+			// Update state for next cycle
+			// Note: We use the calculates values for the *next* iteration
+			// but we store the *current* carry forward (brought into this cycle) 
+			// or the *next*? Usually report shows "Carry Forward (Next)" or "Brought Forward".
+			// Let's store "Carry Forward Left/Right" as the value *resulting* from this cycle 
+			// (available for next), matching "Carry Forward" terminology.
+		}
 
 		// Generate cycle summary
 		cycleSummary := fmt.Sprintf(
@@ -1218,6 +1295,11 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 			formatProductSummary(productDistribution),
 			formatLegSummary(legVolumes),
 		)
+		
+		if genealogyType == "binary" {
+			cycleSummary += fmt.Sprintf(". Binary: Matched $%.2f, Capped $%.2f, CF Left $%.2f, CF Right $%.2f", 
+				matchedVolume, cvPayoutVolume, nextCarryLeft, nextCarryRight)
+		}
 
 		cycleVolumes[cycleNumber] = PayoutCycleVolume{
 			CycleNumber:         cycleNumber,
@@ -1228,7 +1310,17 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 			ProductDistribution: productDistribution,
 			LevelBreakdown:      levelBreakdown,
 			CycleSummary:        cycleSummary,
+			// Binary Fields
+			MatchedVolume:     matchedVolume,
+			PayoutVolume:      cvPayoutVolume,
+			CapFlush:          capFlush,
+			CarryForwardLeft:  nextCarryLeft, 
+			CarryForwardRight: nextCarryRight,
 		}
+		
+		// Update global carry forward for next iteration
+		carryForwardLeft = nextCarryLeft
+		carryForwardRight = nextCarryRight
 	}
 
 	return cycleVolumes
