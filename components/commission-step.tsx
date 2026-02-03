@@ -114,26 +114,31 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
     }
   }, [config])
 
-  useEffect(() => {
-    onConfigChange(localConfig)
-  }, [localConfig, onConfigChange])
+  // Removed sync effect to prevent loops
+
+  const updateConfig = (newConfig: CommissionConfig) => {
+    setLocalConfig(newConfig)
+    onConfigChange(newConfig)
+  }
 
   const updateStandardCommission = (id: string, field: keyof StandardCommission, value: any) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      standard_commissions: prev.standard_commissions.map(comm =>
+    const updated = {
+      ...localConfig,
+      standard_commissions: localConfig.standard_commissions.map(comm =>
         comm.id === id ? { ...comm, [field]: value } : comm
       )
-    }))
+    }
+    updateConfig(updated)
   }
 
   const updateCustomCommission = (id: string, field: keyof CustomCommission, value: any) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      custom_commissions: prev.custom_commissions.map(comm =>
+    const updated = {
+      ...localConfig,
+      custom_commissions: localConfig.custom_commissions.map(comm =>
         comm.id === id ? { ...comm, [field]: value } : comm
       )
-    }))
+    }
+    updateConfig(updated)
   }
 
   const addCustomCommission = () => {
@@ -148,18 +153,20 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
       max_level: 5,
       max_volume: 10000
     }
-    
-    setLocalConfig(prev => ({
-      ...prev,
-      custom_commissions: [...prev.custom_commissions, newCommission]
-    }))
+
+    const updated = {
+      ...localConfig,
+      custom_commissions: [...localConfig.custom_commissions, newCommission]
+    }
+    updateConfig(updated)
   }
 
   const removeCustomCommission = (id: string) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      custom_commissions: prev.custom_commissions.filter(comm => comm.id !== id)
-    }))
+    const updated = {
+      ...localConfig,
+      custom_commissions: localConfig.custom_commissions.filter(comm => comm.id !== id)
+    }
+    updateConfig(updated)
   }
 
   const getCommissionIcon = (type: string) => {
@@ -195,62 +202,62 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
         return 'bg-gray-100 text-gray-800'
     }
   }
-  
+
   const calculateTotalCommission = () => {
     const standardTotal = localConfig.standard_commissions
       .filter(comm => comm.is_enabled)
       .reduce((sum, comm) => sum + comm.percentage, 0)
-    
+
     const customTotal = localConfig.custom_commissions
       .filter(comm => comm.is_enabled)
       .reduce((sum, comm) => sum + comm.percentage, 0)
-    
+
     return standardTotal + customTotal
   }
 
   const validateConfig = () => {
     // Check if at least one standard commission is enabled
     const hasValidStandard = localConfig.standard_commissions.some(comm => comm.is_enabled)
-    
+
     // Filter only ENABLED custom commissions and validate their fields
     const enabledCustomCommissions = localConfig.custom_commissions.filter(comm => comm.is_enabled)
-    const hasValidCustom = enabledCustomCommissions.length === 0 
-      ? true 
-      : enabledCustomCommissions.every(comm => 
-          comm.name.trim() !== '' && 
-          comm.percentage > 0 && 
-          comm.trigger_value > 0 &&
-          (comm.max_level === undefined || comm.max_level > 0)
-        )
-    
+    const hasValidCustom = enabledCustomCommissions.length === 0
+      ? true
+      : enabledCustomCommissions.every(comm =>
+        comm.name.trim() !== '' &&
+        comm.percentage > 0 &&
+        comm.trigger_value > 0 &&
+        (comm.max_level === undefined || comm.max_level > 0)
+      )
+
     // Check total commission doesn't exceed 100%
     const totalCommission = calculateTotalCommission()
     const isWithinLimit = totalCommission <= 100
-    
+
     return hasValidStandard && hasValidCustom && isWithinLimit
   }
-  
+
   const getValidationErrors = () => {
     const errors: string[] = []
-    
+
     const enabledStandardCount = localConfig.standard_commissions.filter(c => c.is_enabled).length
     if (enabledStandardCount === 0) {
       errors.push('Enable at least one standard commission')
     }
-    
+
     const enabledCustomCommissions = localConfig.custom_commissions.filter(comm => comm.is_enabled)
-    const invalidCustom = enabledCustomCommissions.filter(comm => 
+    const invalidCustom = enabledCustomCommissions.filter(comm =>
       !comm.name.trim() || comm.percentage <= 0 || comm.trigger_value <= 0
     )
     if (invalidCustom.length > 0) {
       errors.push('Complete all enabled custom commission fields')
     }
-    
+
     const totalCommission = calculateTotalCommission()
     if (totalCommission > 100) {
       errors.push(`Total commission (${totalCommission.toFixed(1)}%) exceeds 100%`)
     }
-    
+
     return errors
   }
 
@@ -264,7 +271,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
             {localConfig.standard_commissions.filter(c => c.is_enabled).length} Active
           </Badge>
         </div>
-        
+
         <div className="space-y-4">
           {localConfig.standard_commissions.map((commission) => (
             <Card key={commission.id} className="relative">
@@ -281,7 +288,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                     <div className="flex items-center space-x-2">
                       <Switch
                         checked={commission.is_enabled}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           updateStandardCommission(commission.id, 'is_enabled', checked)
                         }
                       />
@@ -293,7 +300,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                   </div>
                 </div>
               </CardHeader>
-              
+
               {commission.is_enabled && (
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -306,13 +313,13 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                         max="100"
                         step="0.1"
                         value={commission.percentage}
-                        onChange={(e) => 
+                        onChange={(e) =>
                           updateStandardCommission(commission.id, 'percentage', parseFloat(e.target.value) || 0)
                         }
                         placeholder="0.0"
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor={`${commission.id}-max-level`}>Max Level</Label>
                       <Input
@@ -321,13 +328,13 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                         min="1"
                         max="20"
                         value={commission.max_level || ''}
-                        onChange={(e) => 
+                        onChange={(e) =>
                           updateStandardCommission(commission.id, 'max_level', parseInt(e.target.value) || 0)
                         }
                         placeholder="Unlimited"
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor={`${commission.id}-min-volume`}>Min Volume ($)</Label>
                       <Input
@@ -336,14 +343,14 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                         min="0"
                         step="0.01"
                         value={commission.min_volume || ''}
-                        onChange={(e) => 
+                        onChange={(e) =>
                           updateStandardCommission(commission.id, 'min_volume', parseFloat(e.target.value) || 0)
                         }
                         placeholder="0.00"
                       />
                     </div>
                   </div>
-                  
+
                   {commission.max_volume && (
                     <div>
                       <Label htmlFor={`${commission.id}-max-volume`}>Max Volume ($)</Label>
@@ -353,7 +360,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                         min="0"
                         step="0.01"
                         value={commission.max_volume}
-                        onChange={(e) => 
+                        onChange={(e) =>
                           updateStandardCommission(commission.id, 'max_volume', parseFloat(e.target.value) || 0)
                         }
                         placeholder="0.00"
@@ -382,7 +389,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
             Add Custom Commission
           </Button>
         </div>
-        
+
         {localConfig.custom_commissions.length === 0 ? (
           <Card className="border-dashed">
             <CardContent className="p-8 text-center">
@@ -416,7 +423,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                       <div className="flex items-center space-x-2">
                         <Switch
                           checked={commission.is_enabled}
-                          onCheckedChange={(checked) => 
+                          onCheckedChange={(checked) =>
                             updateCustomCommission(commission.id, 'is_enabled', checked)
                           }
                         />
@@ -434,7 +441,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                     </div>
                   </div>
                 </CardHeader>
-                
+
                 {commission.is_enabled && (
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -443,26 +450,26 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                         <Input
                           id={`${commission.id}-name`}
                           value={commission.name}
-                          onChange={(e) => 
+                          onChange={(e) =>
                             updateCustomCommission(commission.id, 'name', e.target.value)
                           }
                           placeholder="Enter commission name"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor={`${commission.id}-description`}>Description</Label>
                         <Input
                           id={`${commission.id}-description`}
                           value={commission.description}
-                          onChange={(e) => 
+                          onChange={(e) =>
                             updateCustomCommission(commission.id, 'description', e.target.value)
                           }
                           placeholder="Enter description"
                         />
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <Label htmlFor={`${commission.id}-percentage`}>Commission Percentage (%)</Label>
@@ -473,18 +480,18 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                           max="100"
                           step="0.1"
                           value={commission.percentage}
-                          onChange={(e) => 
+                          onChange={(e) =>
                             updateCustomCommission(commission.id, 'percentage', parseFloat(e.target.value) || 0)
                           }
                           placeholder="0.0"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor={`${commission.id}-trigger-type`}>Trigger Type</Label>
                         <Select
                           value={commission.trigger_type}
-                          onValueChange={(value: 'volume' | 'level' | 'milestone') => 
+                          onValueChange={(value: 'volume' | 'level' | 'milestone') =>
                             updateCustomCommission(commission.id, 'trigger_type', value)
                           }
                         >
@@ -498,7 +505,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                           </SelectContent>
                         </Select>
                       </div>
-                      
+
                       <div>
                         <Label htmlFor={`${commission.id}-trigger-value`}>Trigger Value</Label>
                         <Input
@@ -507,14 +514,14 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                           min="0"
                           step="0.01"
                           value={commission.trigger_value}
-                          onChange={(e) => 
+                          onChange={(e) =>
                             updateCustomCommission(commission.id, 'trigger_value', parseFloat(e.target.value) || 0)
                           }
                           placeholder="0.00"
                         />
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor={`${commission.id}-max-level`}>Max Level</Label>
@@ -524,13 +531,13 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                           min="1"
                           max="20"
                           value={commission.max_level || ''}
-                          onChange={(e) => 
+                          onChange={(e) =>
                             updateCustomCommission(commission.id, 'max_level', parseInt(e.target.value) || 0)
                           }
                           placeholder="Unlimited"
                         />
                       </div>
-                      
+
                       <div>
                         <Label htmlFor={`${commission.id}-max-volume`}>Max Volume ($)</Label>
                         <Input
@@ -539,7 +546,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
                           min="0"
                           step="0.01"
                           value={commission.max_volume || ''}
-                          onChange={(e) => 
+                          onChange={(e) =>
                             updateCustomCommission(commission.id, 'max_volume', parseFloat(e.target.value) || 0)
                           }
                           placeholder="0.00"
@@ -585,7 +592,7 @@ export default function CommissionStep({ config, onConfigChange }: CommissionSte
           </ul>
         </div>
       )}
-      
+
       {/* Success Status */}
       {validateConfig() && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-md">

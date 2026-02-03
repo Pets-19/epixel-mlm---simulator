@@ -1180,7 +1180,7 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 	carryForwardRight := 0.0
 
 	// Get sorted cycles to ensure correct carry forward calculation
-	cycles := getKeys(usersByCycle)
+	cycles := getKeysForCycleMap(usersByCycle)
 	// Simple bubble sort for cycles (num cycles is small)
 	for i := 0; i < len(cycles)-1; i++ {
 		for j := 0; j < len(cycles)-i-1; j++ {
@@ -1189,7 +1189,7 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 			}
 		}
 	}
-	
+
 	// Ensure we process all cycles from 1 to max cycle found, even if some have no users
 	maxCycle := 0
 	if len(cycles) > 0 {
@@ -1209,10 +1209,10 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 	// Calculate volumes for each cycle
 	for cycleNumber := 1; cycleNumber <= maxCycle; cycleNumber++ {
 		cycleUsers := usersByCycle[cycleNumber]
-		
+
 		// Calculate personal volume for this cycle (Total Sales in Company/Tree)
 		personalVolume := 0.0
-		for _, user := range users { 
+		for _, user := range users {
 			if user.PersonalVolumePerCycle[cycleNumber] > 0 {
 				personalVolume += user.PersonalVolumePerCycle[cycleNumber]
 			}
@@ -1225,13 +1225,13 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 		for _, legKey := range legKeys {
 			legVolumes[legKey] = 0.0
 		}
-		
+
 		if rootUser != nil {
 			// Team Volume
 			if rootUser.TeamVolumePerCycle[cycleNumber] > 0 {
 				teamVolume = rootUser.TeamVolumePerCycle[cycleNumber]
 			}
-			
+
 			// Leg Volumes
 			for _, legKey := range legKeys {
 				if rootUser.LegVolumePerCycle[legKey] != nil && rootUser.LegVolumePerCycle[legKey][cycleNumber] > 0 {
@@ -1248,7 +1248,7 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 
 		// Binary Plan Logic: Carry Forward & Capping
 		var matchedVolume, cvPayoutVolume, capFlush, nextCarryLeft, nextCarryRight float64
-		
+
 		if genealogyType == "binary" {
 			// Current Cycle Raw Volumes
 			currentLeft := legVolumes["left"]
@@ -1275,12 +1275,12 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 				cvPayoutVolume = payoutCap
 				capFlush = matchedVolume - payoutCap
 			}
-			
+
 			// Update state for next cycle
 			// Note: We use the calculates values for the *next* iteration
-			// but we store the *current* carry forward (brought into this cycle) 
+			// but we store the *current* carry forward (brought into this cycle)
 			// or the *next*? Usually report shows "Carry Forward (Next)" or "Brought Forward".
-			// Let's store "Carry Forward Left/Right" as the value *resulting* from this cycle 
+			// Let's store "Carry Forward Left/Right" as the value *resulting* from this cycle
 			// (available for next), matching "Carry Forward" terminology.
 		}
 
@@ -1295,9 +1295,9 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 			formatProductSummary(productDistribution),
 			formatLegSummary(legVolumes),
 		)
-		
+
 		if genealogyType == "binary" {
-			cycleSummary += fmt.Sprintf(". Binary: Matched $%.2f, Capped $%.2f, CF Left $%.2f, CF Right $%.2f", 
+			cycleSummary += fmt.Sprintf(". Binary: Matched $%.2f, Capped $%.2f, CF Left $%.2f, CF Right $%.2f",
 				matchedVolume, cvPayoutVolume, nextCarryLeft, nextCarryRight)
 		}
 
@@ -1314,10 +1314,10 @@ func generateVolumeByPayoutCycle(users []SimulationUser, products []BusinessProd
 			MatchedVolume:     matchedVolume,
 			PayoutVolume:      cvPayoutVolume,
 			CapFlush:          capFlush,
-			CarryForwardLeft:  nextCarryLeft, 
+			CarryForwardLeft:  nextCarryLeft,
 			CarryForwardRight: nextCarryRight,
 		}
-		
+
 		// Update global carry forward for next iteration
 		carryForwardLeft = nextCarryLeft
 		carryForwardRight = nextCarryRight
@@ -1653,6 +1653,15 @@ func calculateLegLevelBreakdownRecursive(userID string, users []SimulationUser, 
 
 // getKeys returns the keys from a map as a slice
 func getKeys(m map[int]int) []int {
+	keys := make([]int, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// getKeysForCycleMap returns the keys from a map[int][]SimulationUser as a slice
+func getKeysForCycleMap(m map[int][]SimulationUser) []int {
 	keys := make([]int, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)

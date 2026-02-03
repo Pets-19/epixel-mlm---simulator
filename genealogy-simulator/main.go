@@ -7,9 +7,15 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load environment variables from .env file (one level up)
+	if err := godotenv.Load("../.env"); err != nil {
+		log.Println("No .env file found or error loading it. Using default/environment variables.")
+	}
+
 	// Initialize database connection
 	InitDB()
 	defer db.Close()

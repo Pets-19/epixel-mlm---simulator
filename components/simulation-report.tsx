@@ -93,9 +93,9 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
   // Filter users based on search term
   const filteredUsers = useMemo(() => {
     if (!searchTerm.trim()) return simulationResult.users
-    
+
     const searchLower = searchTerm.toLowerCase()
-    return simulationResult.users.filter(user => 
+    return simulationResult.users.filter(user =>
       user.name.toLowerCase().includes(searchLower) ||
       (user.product_name && user.product_name.toLowerCase().includes(searchLower))
     )
@@ -126,7 +126,7 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
   const getCumulativeVolumes = (user: SimulationUser) => {
     const totalPersonalVolume = user.personal_volume
     const totalTeamVolume = user.team_volume
-    
+
     // Calculate cumulative leg volumes from all cycles
     const cumulativeLegVolumes: Record<string, number> = {}
     if (user.leg_volume_per_cycle) {
@@ -134,7 +134,7 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
         cumulativeLegVolumes[legKey] = Object.values(cycleVolumes).reduce((sum, vol) => sum + vol, 0)
       })
     }
-    
+
     return {
       totalPersonalVolume,
       totalTeamVolume,
@@ -158,19 +158,19 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
     simulationResult.users.forEach(user => {
       // Get all cycles where this user has activity
       const userCycles = new Set<number>()
-      
+
       // Add user's own payout cycle
       if (user.payout_cycle > 0) {
         userCycles.add(user.payout_cycle)
       }
-      
+
       // Add cycles from team volume per cycle
       if (user.team_volume_per_cycle) {
         Object.keys(user.team_volume_per_cycle).forEach(cycle => {
           userCycles.add(parseInt(cycle))
         })
       }
-      
+
       // Add cycles from leg volume per cycle
       if (user.leg_volume_per_cycle) {
         Object.values(user.leg_volume_per_cycle).forEach(cycleVolumes => {
@@ -219,7 +219,7 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
           <h2 className="text-2xl font-bold text-gray-900">Simulation Report</h2>
           <p className="text-gray-600">Genealogy Type: {genealogyType}</p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-3">
           {/* View Mode Toggle */}
           <div className="flex border rounded-lg">
@@ -291,6 +291,7 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
                     expandedNodes={expandedNodes}
                     onToggleNode={onToggleNode}
                     indent={0}
+                    selectedPayoutCycle={selectedPayoutCycle}
                   />
                 ))}
             </div>
@@ -377,37 +378,62 @@ interface TreeNodeProps {
   expandedNodes: Set<string>
   onToggleNode: (nodeId: string) => void
   indent: number
+  selectedPayoutCycle: string
 }
 
-function TreeNode({ user, users, genealogyType, expandedNodes, onToggleNode, indent }: TreeNodeProps) {
+function TreeNode({ user, users, genealogyType, expandedNodes, onToggleNode, indent, selectedPayoutCycle }: TreeNodeProps) {
   const hasChildren = user.children && user.children.length > 0
   const isExpanded = expandedNodes.has(user.id)
-  
-  // Get cumulative volumes for display
-  const getCumulativeVolumes = (user: SimulationUser) => {
-    const totalPersonalVolume = user.personal_volume
-    const totalTeamVolume = user.team_volume
-    
+
+  // Get volumes for display based on selected cycle
+  const getDisplayVolumes = (user: SimulationUser) => {
+    // If a specific cycle is selected
+    if (selectedPayoutCycle !== 'all') {
+      const cycle = selectedPayoutCycle
+
+      const personalVolume = user.personal_volume_per_cycle?.[cycle] || 0
+      const teamVolume = user.team_volume_per_cycle?.[cycle] || 0
+
+      const legVolumes: Record<string, number> = {}
+      if (user.leg_volume_per_cycle) {
+        Object.entries(user.leg_volume_per_cycle).forEach(([legKey, cycleVolumes]) => {
+          legVolumes[legKey] = cycleVolumes[cycle] || 0
+        })
+      }
+
+      return {
+        personalVolume,
+        teamVolume,
+        legVolumes,
+        isSpecificCycle: true
+      }
+    }
+
+    // Default: Cumulative volumes (ALL cycles)
+    const personalVolume = user.personal_volume
+    const teamVolume = user.team_volume
+
     // Calculate cumulative leg volumes from all cycles
-    const cumulativeLegVolumes: Record<string, number> = {}
+    const legVolumes: Record<string, number> = {}
     if (user.leg_volume_per_cycle) {
       Object.entries(user.leg_volume_per_cycle).forEach(([legKey, cycleVolumes]) => {
-        cumulativeLegVolumes[legKey] = Object.values(cycleVolumes).reduce((sum, vol) => sum + vol, 0)
+        legVolumes[legKey] = Object.values(cycleVolumes).reduce((sum, vol) => sum + vol, 0)
       })
     }
-    
+
     return {
-      totalPersonalVolume,
-      totalTeamVolume,
-      cumulativeLegVolumes
+      personalVolume,
+      teamVolume,
+      legVolumes,
+      isSpecificCycle: false
     }
   }
 
-  const volumes = getCumulativeVolumes(user)
+  const volumes = getDisplayVolumes(user)
 
   return (
     <div className="mb-2">
-      <div 
+      <div
         className="flex items-center p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border cursor-pointer transition-colors"
         style={{ marginLeft: `${indent}px` }}
         onClick={() => onToggleNode(user.id)}
@@ -421,7 +447,7 @@ function TreeNode({ user, users, genealogyType, expandedNodes, onToggleNode, ind
             )}
           </div>
         )}
-        
+
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -436,34 +462,41 @@ function TreeNode({ user, users, genealogyType, expandedNodes, onToggleNode, ind
                     {getLegLabel(user.genealogy_position, genealogyType)}
                   </Badge>
                 )}
+                {/* Show User's Enrollment Cycle if viewing All, or the Current View Cycle */}
                 <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800">
-                  Cycle {user.payout_cycle}
+                  {selectedPayoutCycle === 'all' ? `Joined Cycle ${user.payout_cycle}` : `Cycle ${selectedPayoutCycle}`}
                 </Badge>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-4 text-sm">
-              {/* Total Personal Volume */}
+              {/* Personal Volume */}
               <div className="text-center">
                 <div className="font-medium text-green-600">
-                  ${volumes.totalPersonalVolume.toLocaleString()}
+                  ${volumes.personalVolume.toLocaleString()}
                 </div>
-                <div className="text-xs text-gray-500">Total Personal</div>
+                <div className="text-xs text-gray-500">
+                  {volumes.isSpecificCycle ? 'Cycle PV' : 'Total PV'}
+                </div>
               </div>
-              
-              {/* Total Team Volume */}
+
+              {/* Team Volume */}
               <div className="text-center">
                 <div className="font-medium text-blue-600">
-                  ${volumes.totalTeamVolume.toLocaleString()}
+                  ${volumes.teamVolume.toLocaleString()}
                 </div>
-                <div className="text-xs text-gray-500">Total Team</div>
+                <div className="text-xs text-gray-500">
+                  {volumes.isSpecificCycle ? 'Cycle Team' : 'Total Team'}
+                </div>
               </div>
-              
-              {/* Total Leg Volumes */}
+
+              {/* Leg Volumes */}
               <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">Total Legs:</div>
+                <div className="text-xs text-gray-500 mb-1">
+                  {volumes.isSpecificCycle ? 'Cycle Legs:' : 'Total Legs:'}
+                </div>
                 <div className="space-y-1">
-                  {Object.entries(volumes.cumulativeLegVolumes).map(([legKey, volume]) => (
+                  {Object.entries(volumes.legVolumes).map(([legKey, volume]) => (
                     <div key={legKey} className="text-xs">
                       <span className="font-medium text-indigo-600">{legKey}:</span> ${volume.toLocaleString()}
                     </div>
@@ -474,7 +507,7 @@ function TreeNode({ user, users, genealogyType, expandedNodes, onToggleNode, ind
           </div>
         </div>
       </div>
-      
+
       {/* Render children if expanded */}
       {isExpanded && hasChildren && (
         <div className="mt-2">
@@ -490,6 +523,7 @@ function TreeNode({ user, users, genealogyType, expandedNodes, onToggleNode, ind
                   expandedNodes={expandedNodes}
                   onToggleNode={onToggleNode}
                   indent={indent + 20}
+                  selectedPayoutCycle={selectedPayoutCycle}
                 />
               )
             }

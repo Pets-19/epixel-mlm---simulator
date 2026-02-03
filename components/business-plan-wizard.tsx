@@ -43,23 +43,23 @@ export default function BusinessPlanWizard() {
   // DERIVED VALIDATION - Single source of truth, always up-to-date
   const isCommissionValid = useMemo(() => {
     if (!commissionConfig) return false
-    
+
     // Check if at least one standard commission is enabled
     const hasValidStandard = commissionConfig.standard_commissions.some(comm => comm.is_enabled)
     if (!hasValidStandard) return false
-    
+
     // Filter only ENABLED custom commissions and validate their fields
     const enabledCustomCommissions = commissionConfig.custom_commissions.filter(comm => comm.is_enabled)
-    const hasValidCustom = enabledCustomCommissions.length === 0 
-      ? true 
-      : enabledCustomCommissions.every(comm => 
-          comm.name.trim() !== '' && 
-          comm.percentage > 0 && 
-          comm.trigger_value > 0 &&
-          (comm.max_level === undefined || comm.max_level > 0)
-        )
+    const hasValidCustom = enabledCustomCommissions.length === 0
+      ? true
+      : enabledCustomCommissions.every(comm =>
+        comm.name.trim() !== '' &&
+        comm.percentage > 0 &&
+        comm.trigger_value > 0 &&
+        (comm.max_level === undefined || comm.max_level > 0)
+      )
     if (!hasValidCustom) return false
-    
+
     // Check total commission doesn't exceed 100%
     const standardTotal = commissionConfig.standard_commissions
       .filter(comm => comm.is_enabled)
@@ -68,7 +68,7 @@ export default function BusinessPlanWizard() {
       .filter(comm => comm.is_enabled)
       .reduce((sum, comm) => sum + comm.percentage, 0)
     const totalCommission = standardTotal + customTotal
-    
+
     return totalCommission <= 100
   }, [commissionConfig])
 
@@ -267,11 +267,10 @@ export default function BusinessPlanWizard() {
                 {steps.map((step, index) => (
                   <div key={step.id} className="flex items-center">
                     <div className="flex flex-col items-center">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        currentStep >= step.id 
-                          ? 'bg-blue-600 text-white' 
-                          : 'bg-gray-200 text-gray-600'
-                      }`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${currentStep >= step.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-600'
+                        }`}>
                         {currentStep > step.id ? (
                           <CheckCircle className="w-6 h-6" />
                         ) : (
@@ -279,9 +278,8 @@ export default function BusinessPlanWizard() {
                         )}
                       </div>
                       <div className="mt-2 text-center">
-                        <p className={`text-sm font-medium ${
-                          currentStep >= step.id ? 'text-blue-600' : 'text-gray-500'
-                        }`}>
+                        <p className={`text-sm font-medium ${currentStep >= step.id ? 'text-blue-600' : 'text-gray-500'
+                          }`}>
                           {step.title}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">
@@ -290,9 +288,8 @@ export default function BusinessPlanWizard() {
                       </div>
                     </div>
                     {index < steps.length - 1 && (
-                      <div className={`flex-1 h-0.5 mx-4 ${
-                        currentStep > step.id ? 'bg-blue-600' : 'bg-gray-200'
-                      }`} />
+                      <div className={`flex-1 h-0.5 mx-4 ${currentStep > step.id ? 'bg-blue-600' : 'bg-gray-200'
+                        }`} />
                     )}
                   </div>
                 ))}
@@ -302,22 +299,14 @@ export default function BusinessPlanWizard() {
 
           {/* Current Step Content */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Badge variant="outline" className="mr-2">Step {currentStep}</Badge>
-                {steps[currentStep - 1].title}
-              </CardTitle>
-              <CardDescription>
-                {steps[currentStep - 1].description}
-              </CardDescription>
-            </CardHeader>
+
             <CardContent>
               {error && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
                   <p className="text-sm text-red-600">{error}</p>
                 </div>
               )}
-              
+
               {success && (
                 <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
                   <p className="text-sm text-green-600">{success}</p>

@@ -13,6 +13,4 @@ ON business_plan_simulations USING GIN (commission_config);
 COMMENT ON COLUMN business_plan_simulations.commission_config IS 'Stores commission configuration as JSON for the business plan';
 
 -- Log the migration
-INSERT INTO migrations_log (migration_name, executed_at) 
-VALUES ('migration_add_commission_config.sql', NOW())
-ON CONFLICT (migration_name) DO NOTHING;
+
