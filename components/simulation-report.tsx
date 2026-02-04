@@ -153,6 +153,9 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
       teamVolume: number
       leftLegVolume: number
       rightLegVolume: number
+      carryForwardLeft?: number
+      carryForwardRight?: number
+      matchedVolume?: number
     }> = []
 
     simulationResult.users.forEach(user => {
@@ -180,12 +183,46 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
         })
       }
 
+      // Sort cycles ensuring chronological order for carry forward calculation
+      const sortedCycles = Array.from(userCycles).sort((a, b) => a - b)
+
+      // Carry forward trackers
+      let carryForwardLeft = 0
+      let carryForwardRight = 0
+
       // Create a row for each cycle
-      userCycles.forEach(cycle => {
+      sortedCycles.forEach(cycle => {
         const personalVolume = user.personal_volume_per_cycle?.[cycle] || 0
         const teamVolume = user.team_volume_per_cycle?.[cycle] || 0
-        const leftLegVolume = user.leg_volume_per_cycle?.left?.[cycle] || 0
-        const rightLegVolume = user.leg_volume_per_cycle?.right?.[cycle] || 0
+
+        const currentLeft = user.leg_volume_per_cycle?.left?.[cycle] || 0
+        const currentRight = user.leg_volume_per_cycle?.right?.[cycle] || 0
+
+        // Calculate Binary Plan specifics
+        let displayLeft = currentLeft
+        let displayRight = currentRight
+        let matchedVolume = 0
+        let cfLeft = 0
+        let cfRight = 0
+
+        if (simulationResult.genealogy_type.toLowerCase().includes('binary')) {
+          const totalLeft = currentLeft + carryForwardLeft
+          const totalRight = currentRight + carryForwardRight
+
+          matchedVolume = Math.min(totalLeft, totalRight)
+
+          cfLeft = totalLeft - matchedVolume
+          cfRight = totalRight - matchedVolume
+
+          // Update tracking for next cycle
+          carryForwardLeft = cfLeft
+          carryForwardRight = cfRight
+
+          // Update display values to show Available Volume (Current + Previous CF)
+          // Or keep raw and show CF separately?
+          // Standard is usually: Current, CF, Total, Matched, New CF. 
+          // For this condensed view, let's show Current and CF stats.
+        }
 
         tableData.push({
           userId: user.id,
@@ -194,14 +231,19 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
           cycle,
           personalVolume,
           teamVolume,
-          leftLegVolume,
-          rightLegVolume
+          leftLegVolume: currentLeft,
+          rightLegVolume: currentRight,
+          carryForwardLeft: carryForwardLeft, // Value calculated at end of this cycle (for next)
+          carryForwardRight: carryForwardRight,
+          matchedVolume
         })
       })
+
+      return tableData
     })
 
+    // Sort by user name first, then by cycle
     return tableData.sort((a, b) => {
-      // Sort by user name first, then by cycle
       if (a.userName !== b.userName) {
         return a.userName.localeCompare(b.userName)
       }
@@ -320,6 +362,13 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
                     <th className="border border-gray-200 p-3 text-left">Team Volume</th>
                     <th className="border border-gray-200 p-3 text-left">Left Leg Volume</th>
                     <th className="border border-gray-200 p-3 text-left">Right Leg Volume</th>
+                    {genealogyType.toLowerCase().includes('binary') && (
+                      <>
+                        <th className="border border-gray-200 p-3 text-left bg-green-50">Matched Vol</th>
+                        <th className="border border-gray-200 p-3 text-left bg-blue-50">CF Left</th>
+                        <th className="border border-gray-200 p-3 text-left bg-blue-50">CF Right</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -358,6 +407,25 @@ export default function SimulationReport({ simulationResult, genealogyType }: Si
                             ${row.rightLegVolume.toLocaleString()}
                           </div>
                         </td>
+                        {genealogyType.toLowerCase().includes('binary') && (
+                          <>
+                            <td className="border border-gray-200 p-3 bg-green-50">
+                              <div className="font-medium text-green-700">
+                                ${(row.matchedVolume || 0).toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 p-3 bg-blue-50">
+                              <div className="text-sm text-gray-600">
+                                ${(row.carryForwardLeft || 0).toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 p-3 bg-blue-50">
+                              <div className="text-sm text-gray-600">
+                                ${(row.carryForwardRight || 0).toLocaleString()}
+                              </div>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     ))}
                 </tbody>
