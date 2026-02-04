@@ -9,6 +9,7 @@ import { CheckCircle, Circle, ArrowLeft, ArrowRight } from 'lucide-react'
 import UserSelectionStep from './user-selection-step'
 import BusinessProductStep from './business-product-step'
 import SimulationConfigStep from './simulation-config-step'
+import SimulationPlaygroundStep from './simulation-playground-step'
 import CommissionStep, { CommissionConfig } from './commission-step'
 import ReviewStep from './review-step'
 import { BusinessProduct, BusinessPlanCreate, SimulationConfig } from '@/lib/business-plan'
@@ -19,8 +20,6 @@ interface User {
   email: string
   role: string
 }
-
-
 
 export default function BusinessPlanWizard() {
   const { user } = useAuth()
@@ -87,12 +86,13 @@ export default function BusinessPlanWizard() {
     { id: 1, title: 'User Account', description: 'Select or create business user' },
     { id: 2, title: 'Business & Products', description: 'Configure business and products' },
     { id: 3, title: 'Simulation Setup', description: 'Configure genealogy simulation' },
-    { id: 4, title: 'Create Business Plan', description: 'Configure commission structure' },
-    { id: 5, title: 'Review & Create', description: 'Review and create business plan' }
+    { id: 4, title: 'Simulation Playground', description: 'Interactive visualization' },
+    { id: 5, title: 'Create Business Plan', description: 'Configure commission structure' },
+    { id: 6, title: 'Review & Create', description: 'Review and create business plan' }
   ]
 
   const handleNext = () => {
-    if (currentStep < 5) {
+    if (currentStep < 6) {
       setCurrentStep(currentStep + 1)
       setError(null)
     }
@@ -192,8 +192,11 @@ export default function BusinessPlanWizard() {
       case 3:
         return simulationConfig !== null
       case 4:
-        return isCommissionValid
+        // Playground is optional/informational, always allow next if sim exists
+        return simulationConfig !== null && simulationConfig.simulation_result !== undefined
       case 5:
+        return isCommissionValid
+      case 6:
         return true
       default:
         return false
@@ -228,12 +231,19 @@ export default function BusinessPlanWizard() {
         )
       case 4:
         return (
+          <SimulationPlaygroundStep
+            simulationResult={simulationConfig?.simulation_result}
+            genealogyType={simulationConfig?.genealogy_type || 'binary'}
+          />
+        )
+      case 5:
+        return (
           <CommissionStep
             config={commissionConfig}
             onConfigChange={handleCommissionConfig}
           />
         )
-      case 5:
+      case 6:
         return (
           <ReviewStep
             selectedUser={selectedUser}
@@ -327,7 +337,7 @@ export default function BusinessPlanWizard() {
                   Previous
                 </Button>
 
-                {currentStep < 5 ? (
+                {currentStep < 6 ? (
                   <Button
                     onClick={handleNext}
                     disabled={!canProceedToNext()}
@@ -352,4 +362,4 @@ export default function BusinessPlanWizard() {
       </div>
     </div>
   )
-} 
+}
